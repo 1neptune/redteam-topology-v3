@@ -3,6 +3,23 @@
 官网 <https://github.com/1neptune/redteam-topology-v3>
 发布页 <https://github.com/1neptune/redteam-topology-v3/releases>
 
+## v3.6.2
+
+### 修复
+
+- **镜像里跑的是占位程序。** Dockerfile 为加速构建，先在依赖层写了 `fn main() {}` 编译一遍，
+  再 `COPY backend/src` 覆盖成真实源码。但 `COPY` 保留源文件时间戳，占位 `main.rs` 的 mtime
+  反而比源码新，Cargo 据此判定「文件没变」，直接复用了空壳产物。
+  镜像构建成功、容器启动即退出、退出码 0、没有任何日志——正是这个原因。
+  - 现在 `COPY` 之后先 `find src -exec touch` 刷新时间戳，再 `cargo clean -p redteam-atlas` 清掉指纹
+  - 构建完校验产物大小，低于 1 MB 直接让构建失败，不再产出起不来的镜像
+
+### 变更
+
+- 版本号升到 3.6.2。
+
+> 已经构建过 3.6.0 / 3.6.1 的机器需要重建镜像，缓存层里存的还是空壳：
+> `docker compose build --no-cache atlas && docker compose up -d`
 ## v3.6.1
 
 ### 修复

@@ -22,12 +22,26 @@ RUN mkdir -p src && echo 'fn main() {}' > src/main.rs \
 # sqlx 的 migrate! 在编译期读取 migrations 目录，必须一起进来
 COPY backend/src ./src
 COPY backend/migrations ./migrations
+
+# COPY 会保留源文件的时间戳，而上一层的占位 main.rs 是构建那一刻写的，
+# 时间比源码还新。Cargo 按 mtime 判断有无改动，会误认为「没变」而直接复用
+# 空壳产物 fn main() {}——镜像能构建成功，但容器启动即退出、退出码 0、无日志。
+# 这里先把时间戳刷成当前，并清掉本 crate 的指纹，逼 Cargo 重新编译。
+RUN find src -type f -exec touch {} +
+RUN cargo clean -p redteam-atlas || true
+
+# 构建完检查产物大小：占位程序的产物只有几百 KB，真实程序是十几 MB。
+# 万一还是复用了空壳，这里直接让构建失败，不要产出一个起不来的镜像。
 RUN cargo build --release
+RUN size=$(stat -c%s target/release/redteam-atlas) \
+    && echo "二进制大小：$size 字节" \
+    && [ "$size" -gt 1000000 ] \
+    || (echo "构建产物只有 ${size:-0} 字节，疑似复用了占位二进制 fn main(){}" >&2; exit 1)
 
 # ---------- 运行时 ----------
 FROM debian:bookworm-slim
 LABEL org.opencontainers.image.title="RedTeam Atlas" \
-      org.opencontainers.image.version="3.6.1"
+      org.opencontainers.image.version="3.6.2"
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates tini curl gosu \

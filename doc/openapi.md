@@ -8,7 +8,7 @@
 openapi: 3.0.3
 info:
   title: RedTeam Atlas API
-  version: 3.6.1
+  version: 3.6.2
   description: 红队攻防资产与攻击路径拓扑平台
 servers:
   - url: http://localhost:8080/api

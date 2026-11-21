@@ -1,6 +1,6 @@
 [package]
 name = "redteam-atlas"
-version = "3.6.1"
+version = "3.6.2"
 edition = "2021"
 description = "RedTeam Atlas - red team asset and attack path topology backend"
 
