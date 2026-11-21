@@ -158,6 +158,26 @@ sudo ./scripts/deploy.sh
 sudo ATLAS_PORT=8080 ATLAS_ADMIN_PASSWORD='Your#Pass2026' ./scripts/deploy.sh --yes
 ```
 
+**构建慢怎么办**
+
+首次构建要下载并编译全部 Rust 依赖，3–6 分钟属正常。如果每次都卡在 `apt-get install` 上百秒，是包源线路问题，在 `.env` 里指到国内镜像：
+
+```bash
+APT_MIRROR=mirrors.aliyun.com
+NPM_REGISTRY=https://registry.npmmirror.com
+CARGO_MIRROR=sparse+https://mirrors.ustc.edu.cn/crates.io-index/
+```
+
+加完重新构建，apt 阶段通常从 130 秒降到十几秒：
+
+```bash
+docker compose build --no-cache atlas
+```
+
+只有第一次需要 `--no-cache`，之后依赖没变会命中缓存直接跳过。
+
+镜像用了 BuildKit 的缓存挂载（`--mount=type=cache`），需要 Docker 20.10 以上并启用 BuildKit（Docker Desktop 与新版 Docker Engine 默认开启）。
+
 **幂等**
 
 重复执行不会破坏已有数据：`.env` 已存在就原样保留（密钥不变，历史拓扑仍可解密），数据目录已存在就跳过，容器用 `up -d` 覆盖而非重建。要换密钥得显式加 `--recreate`。

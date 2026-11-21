@@ -3,6 +3,25 @@
 官网 <https://github.com/1neptune/redteam-topology-v3>
 发布页 <https://github.com/1neptune/redteam-topology-v3/releases>
 
+## v3.6.3
+
+### 变更
+
+- 构建提速：
+  - apt 与 npm 都用 BuildKit 缓存挂载（`--mount=type=cache`），依赖没变时不再重复下载
+  - api 阶段的 `build-essential` 换成 `gcc libc6-dev pkg-config`。sqlx 的 bundled sqlite 只需要 C 编译器，
+    不需要 make / dpkg-dev / perl，少装一百多 MB
+  - 新增 `APT_MIRROR`、`NPM_REGISTRY`、`CARGO_MIRROR` 三个构建参数，在 `.env` 里设成国内镜像即可。
+    国内线路下 apt 阶段从 130 秒降到十几秒
+- Dockerfile 顶部声明 `# syntax=docker/dockerfile:1.7`，`--mount=type=cache` 需要它。
+
+### 修复
+
+- 运行时阶段的 `LABEL` 移到 apt 层之后，改版本号不再导致重新装包。
+
+### 说明
+
+- 首次构建仍然要下载并编译全部 Rust 依赖，视机器性能约 3–6 分钟；之后的业务改动走缓存通常 1 分钟内完成。
 ## v3.6.2
 
 ### 修复

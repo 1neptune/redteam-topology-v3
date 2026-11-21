@@ -3,7 +3,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: redteam-atlas:3.6.2
+      args:
+        # 国内机器在 .env 里设成 mirrors.aliyun.com 之类，apt 阶段能从 130 秒降到十几秒
+        APT_MIRROR: "${APT_MIRROR:-}"
+        NPM_REGISTRY: "${NPM_REGISTRY:-}"
+        CARGO_MIRROR: "${CARGO_MIRROR:-}"
+    image: redteam-atlas:3.6.3
     container_name: redteam-atlas
     restart: unless-stopped
     ports:
