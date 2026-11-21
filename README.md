@@ -236,6 +236,28 @@ git push origin master --tags
 
 必须带 `v` 前缀的 tag——前端的版本比较会剥掉开头的 `v` 再逐段比，`3.6.0` 和 `v3.6.0` 都能识别，但 Release 与 tag 名字不一致会导致 `releases/latest` 拿不到。
 
+**不要勾 Pre-release**：`releases/latest` 只返回正式发布，勾了之后「检查更新」就会认为没有新版本。
+
+不想点网页的话用 API 建，需要一次 `repo` 权限的 token：
+
+```bash
+TAG=v3.6.0
+BODY=$(awk "/^## $TAG\$/,/^## v[0-9]/" CHANGELOG.md | sed '$d' | tail -n +2)
+
+curl -sS -X POST \
+  -H "Authorization: Bearer $GITHUB_TOKEN" \
+  -H "Accept: application/vnd.github+json" \
+  https://api.github.com/repos/1neptune/redteam-topology-v3/releases \
+  -d "{\"tag_name\":\"$TAG\",\"name\":\"$TAG\",\"body\":$(printf '%s' "$BODY" | jq -Rs .),\"draft\":false,\"prerelease\":false}"
+```
+
+建完验一下，返回的 `tag_name` 应该就是你刚发布的版本：
+
+```bash
+curl -sS https://api.github.com/repos/1neptune/redteam-topology-v3/releases/latest \
+  | grep -o '"tag_name": *"[^"]*"'
+```
+
 **版本号怎么定**
 
 | 改动 | 版本 |
