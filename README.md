@@ -106,6 +106,24 @@ Vite 带热更新，`/api` 与 `/mcp` 代理到 `8080`。
 
 访问终端里打印的地址。
 
+**4. 文档一致性检查**
+
+改动接口、MCP 工具或版本号之后跑一遍，确认文档没和代码脱节：
+
+```powershell
+node scripts/check-docs.mjs
+```
+
+检查八项：版本号六处是否一致、CHANGELOG 顶部版本、openapi 与源码路由是否对齐、mcp.md 与源码工具、srs 功能点编号、已移除功能是否还有残留、README 图片引用、迁移文件是否都记进了 db.md。有不一致时退出码为 1，可直接挂到 CI 或提交前钩子。
+
+**5. 一键启动脚本**
+
+```powershell
+.\scripts\run.ps1
+```
+
+`run.ps1` 必须存成 UTF-8 **带 BOM**，否则 PowerShell 会按本地代码页解析导致语法错误。
+
 ---
 
 ## 服务器生产环境 Docker 部署
