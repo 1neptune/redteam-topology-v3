@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: redteam-atlas:3.4.0
+    image: redteam-atlas:3.5.0
     container_name: redteam-atlas
     restart: unless-stopped
     ports:

@@ -217,9 +217,18 @@ fn spawn_script(script: &Path) -> Result<(), AppError> {
 /// 执行一键更新
 pub fn upgrade(cfg: &Config) -> Result<UpgradeResult, AppError> {
     if in_container() {
-        return Err(AppError::BadRequest(
-            "容器部署请在宿主机执行 docker compose pull && docker compose up -d".into(),
-        ));
+        // 容器不能重建自身：把版本对比做出来，让宿主侧脚本接管
+        let latest = std::panic::catch_unwind(|| latest_release(cfg.update_repo.trim()))
+            .ok()
+            .and_then(Result::ok)
+            .and_then(|r| r.get("tag_name").and_then(|v| v.as_str()).map(str::to_string));
+        let hint = match latest {
+            Some(tag) => format!(
+                "容器部署请在宿主机运行 ./scripts/upgrade.sh（最新版本 {tag}）"
+            ),
+            None => "容器部署请在宿主机运行 ./scripts/upgrade.sh".to_string(),
+        };
+        return Err(AppError::BadRequest(hint));
     }
 
     let current = env!("CARGO_PKG_VERSION").to_string();

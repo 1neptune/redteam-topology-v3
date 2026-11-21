@@ -1,0 +1,12 @@
+# 所有文本走 LF，Windows 检出时按需转换
+* text=auto eol=lf
+
+# Shell 脚本必须是 LF，否则容器里 bash 直接报错
+*.sh text eol=lf
+scripts/*.sh text eol=lf
+
+# 二进制不要动
+*.png binary
+*.jpg binary
+*.ico binary
+*.gz binary

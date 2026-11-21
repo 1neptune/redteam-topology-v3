@@ -3,6 +3,19 @@
 官网 <https://github.com/1neptune/redteam-topology-v3>
 发布页 <https://github.com/1neptune/redteam-topology-v3/releases>
 
+## v3.5.0
+
+### 新增
+
+- `scripts/upgrade.sh`：服务器生产环境的 Docker 升级脚本，备份 → 取新代码 → 重建 → 重启 → 健康检查，失败自动回滚。
+  - `./scripts/upgrade.sh` 升到远端最新；`v3.5.0` 这样的参数可钉到指定 tag
+  - `--check` 只对比版本不动手；`--rollback` 回滚到上一次升级前的镜像
+- `.gitattributes` 强制 `*.sh` 用 LF 换行并保留可执行位，避免 Windows 编辑后在容器里跑不起来。
+
+### 变更
+
+- 容器内点「一键更新」不再只提示 `docker compose pull`，改为给出最新版本号与宿主侧的 `./scripts/upgrade.sh` 命令。
+- 版本号统一升到 3.5.0。
 ## v3.4.0
 
 ### 新增

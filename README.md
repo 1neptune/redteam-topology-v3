@@ -146,24 +146,105 @@ docker compose ps                # 健康状态
 
 ## 服务器生产环境 Docker 升级
 
+用仓库自带的脚本，一条命令做完备份、构建、重启、健康检查，失败自动回滚。
+
 ```bash
-# 1. 备份：数据库 + 密钥 + 上传文件，三样缺一不可
+chmod +x scripts/upgrade.sh     # 首次需要赋执行权限
+
+./scripts/upgrade.sh --check    # 只看当前版本与远端最新版本
+./scripts/upgrade.sh            # 升级到远端最新
+./scripts/upgrade.sh v3.5.0     # 钉到指定 tag
+./scripts/upgrade.sh --rollback # 回滚到上一次升级前
+```
+
+**脚本做的事**
+
+1. 把 `/data/atlas` 打成 `backups/<时间戳>/atlas-data.tar.gz`，同时备份 `.env` 与 `docker-compose.yml`，保留最近 5 份
+2. 记下当前镜像 id 与 git 提交，写进 `.upgrade-state`，作为回滚依据
+3. `git fetch --tags` 后 `git pull --ff-only`（或切到指定 tag）
+4. `docker compose build --pull` 重建镜像，`up -d` 重启
+5. 轮询 `http://127.0.0.1:<ATLAS_PORT>/` 最多 60 秒等就绪
+6. 健康检查不过就自动 `--rollback`，把升级前的镜像重新拉起
+
+**可用环境变量**
+
+| 变量 | 默认 | 说明 |
+| --- | --- | --- |
+| `BACKUP_DIR` | `./backups` | 备份存放目录 |
+| `KEEP_BACKUPS` | `5` | 保留几份备份 |
+| `HEALTH_TRIES` | `30` | 健康检查次数，每次间隔 2 秒 |
+| `HEALTH_URL` | `http://127.0.0.1:<port>/` | 自定义探测地址 |
+
+**手动做法**（脚本不可用时）
+
+```bash
 docker compose exec atlas tar czf - /data > atlas-backup-$(date +%F).tar.gz
-
-# 2. 取新代码
 git pull
-
-# 3. 重建并重启
 docker compose build
 docker compose up -d
-
-# 4. 确认
 docker compose logs -f atlas
 ```
 
 数据库迁移在启动时自动执行，无需手工跑 SQL。已应用的迁移文件不能再改，要调整就新增一个迁移。
 
-回滚：恢复备份目录后，用上一个镜像重新 `up -d`。
+**界面上的「一键更新」**
+
+顶栏「检查更新」按钮查的是 GitHub Releases 的 `releases/latest`，显示当前版本与最新版本。容器部署下点「一键更新」会提示最新版本号与宿主侧要执行的 `./scripts/upgrade.sh`——容器不能重建自身，这一步必须在宿主机完成。
+
+---
+
+## 版本发布
+
+版本号取自 `CHANGELOG.md` 与 GitHub Releases，两处必须一致。每次功能改动都走一遍：
+
+**1. 更新 CHANGELOG.md**
+
+在顶部加一节，按「新增 / 变更 / 修复」分类：
+
+```markdown
+## v3.6.0
+
+### 新增
+- ...
+```
+
+**2. 同步版本号**
+
+六处一起改，漏一处就会出现「界面显示一个版本、镜像标签是另一个」：
+
+```
+backend/Cargo.toml          version = "3.6.0"
+frontend/package.json       "version": "3.6.0"
+docker-compose.yml          image: redteam-atlas:3.6.0
+Dockerfile                  org.opencontainers.image.version="3.6.0"
+doc/openapi.md              version: 3.6.0
+doc/mcp.md                  serverInfo.version: 3.6.0
+```
+
+**3. 提交并打 tag**
+
+```bash
+git add -A
+git commit -m "feat: 三句话说明改了什么"
+git tag -a v3.6.0 -m "v3.6.0"
+git push origin master --tags
+```
+
+**4. 建 Release**
+
+到 <https://github.com/1neptune/redteam-topology-v3/releases> 新建 Release，选刚推的 tag，正文直接粘 CHANGELOG 里那一节。
+
+必须带 `v` 前缀的 tag——前端的版本比较会剥掉开头的 `v` 再逐段比，`3.6.0` 和 `v3.6.0` 都能识别，但 Release 与 tag 名字不一致会导致 `releases/latest` 拿不到。
+
+**版本号怎么定**
+
+| 改动 | 版本 |
+| --- | --- |
+| 加功能、加接口、加工具 | 次版本 +1（3.5.0 → 3.6.0） |
+| 只修 bug、改文案、调样式 | 修订号 +1（3.5.0 → 3.5.1） |
+| 破坏兼容：改接口字段、改数据表、换加密方式 | 主版本 +1（3.5.0 → 4.0.0） |
+
+数据库迁移算破坏兼容——旧数据不迁移就跑不起来，主版本 +1，并在 CHANGELOG 里写清楚迁移步骤。
 
 ---
 
