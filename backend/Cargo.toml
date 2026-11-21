@@ -1,0 +1,36 @@
+[package]
+name = "redteam-atlas"
+version = "3.4.0"
+edition = "2021"
+description = "RedTeam Atlas - red team asset and attack path topology backend"
+
+[dependencies]
+axum = "0.8"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time"] }
+tower-http = { version = "0.6", features = ["cors", "trace", "fs"] }
+sqlx = { version = "0.8", default-features = false, features = [
+    "runtime-tokio",
+    "sqlite",
+    "migrate",
+    "macros",
+] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+jsonwebtoken = "9"
+argon2 = "0.5"
+aes-gcm = "0.10"
+base64 = "0.22"
+uuid = { version = "1", features = ["v4"] }
+thiserror = "2"
+dotenvy = "0.15"
+rand = "0.9"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+ureq = { version = "2", default-features = false, features = ["tls", "gzip", "json"] }
+hmac = "0.13.0"
+sha2 = "0.11.1"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1

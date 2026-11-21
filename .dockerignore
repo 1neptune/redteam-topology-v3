@@ -1,0 +1,14 @@
+# 构建上下文里不需要的东西：让 COPY 更快、缓存更稳
+**/node_modules
+**/dist
+backend/target
+backend/data
+.git
+.gitignore
+.tmp
+*.log
+.env
+**/.env
+doc
+CHANGELOG.md
+README.md

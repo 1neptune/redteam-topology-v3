@@ -1,0 +1,106 @@
+/** 漏洞配图：上传、取回、转 data URL。 */
+
+import { http } from './http'
+import { uploadIcon } from './asset'
+
+/** 单张图片上限（与后端 uploads 限制一致） */
+export const IMAGE_MAX_BYTES = 8 * 1024 * 1024
+
+/** 一条漏洞最多挂几张图 */
+export const IMAGE_MAX_COUNT = 8
+
+/** upload id 或签名地址 → data URL 的会话内缓存 */
+export const imageCache = new Map<string, string>()
+const cache = imageCache
+
+/** 编辑框内联图片的最长边，超过就等比缩小 */
+const INLINE_MAX_EDGE = 1600
+
+/** 压到 JPEG 画布上，返回新的 data URL（同尺寸小图直接返回原样） */
+async function compress(file: File): Promise<string> {
+  const url = URL.createObjectURL(file)
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const probe = new Image()
+      probe.onload = () => resolve(probe)
+      probe.onerror = () => reject(new Error('图片无法解码'))
+      probe.src = url
+    })
+    const scale = Math.min(1, INLINE_MAX_EDGE / Math.max(image.naturalWidth, image.naturalHeight))
+    // 已经足够小就不要再压一遍，避免无谓损失
+    if (scale === 1 && file.size <= 320 * 1024 && file.type !== 'image/png') {
+      const raw = await toBase64(file)
+      return `data:${file.type};base64,${raw}`
+    }
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale))
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale))
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error('浏览器不支持画布')
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height)
+    return canvas.toDataURL('image/jpeg', 0.82)
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
+/** 文件转 base64（不带 data: 前缀） */
+function toBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = String(reader.result ?? '')
+      resolve(result.slice(result.indexOf(',') + 1))
+    }
+    reader.onerror = () => reject(new Error('读取文件失败'))
+    reader.readAsDataURL(file)
+  })
+}
+
+/**
+ * 上传一张图片，返回可直接放进正文的短地址。
+ *
+ * 图片作为独立资源存服务端，正文只留带签名的 URL：
+ * 十几年前的老报告也一样能加载，拓扑 JSON 体积不受图片大小影响，
+ * 也不会再出现被字符上限截断的问题。
+ *
+ * @param file 浏览器 File
+ */
+export async function uploadImage(file: File): Promise<string> {
+  if (!file.type.startsWith('image/')) {
+    throw new Error('只能上传图片')
+  }
+  if (file.size > IMAGE_MAX_BYTES) {
+    throw new Error('图片不能超过 8MB')
+  }
+  const dataUrl = await compress(file)
+  const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1)
+  const result = await uploadIcon(file.name, 'image/jpeg', base64)
+  // 缓存一份 data URL，导出 Word 时不必再取一次
+  cache.set(result.id, dataUrl)
+  cache.set(result.url, dataUrl)
+  return result.url
+}
+
+/**
+ * 取图片的 data URL。
+ *
+ * 报告导出要嵌进 Word、还要被 html-to-image 序列化，
+ * blob URL 在这两处都不可靠，因此统一转成 data URL。
+ */
+export async function imageDataUrl(idOrUrl: string): Promise<string> {
+  const cached = cache.get(idOrUrl)
+  if (cached) return cached
+  // 正文里存的是签名地址，直接取；只给了 id 时走需要登录的接口
+  const path = idOrUrl.startsWith('/') || idOrUrl.startsWith('http') ? idOrUrl : `/uploads/${idOrUrl}`
+  const response = await http.get(path, { responseType: 'blob' })
+  const blob = response.data as Blob
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result ?? ''))
+    reader.onerror = () => reject(new Error('读取图片失败'))
+    reader.readAsDataURL(blob)
+  })
+  cache.set(idOrUrl, dataUrl)
+  return dataUrl
+}

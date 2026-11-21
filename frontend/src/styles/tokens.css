@@ -1,0 +1,60 @@
+/* Hallmark · theme: Console (graphite) · scope: app · tokens
+ * 说明：由 hallmark scaffold 生成，仅追加应用密度所需尺寸令牌，不改动颜色语义。
+ * amber = 人（操作者、当前项、主操作）· cool = 仪器（系统写入、版本、AI）
+ */
+:root {
+  color-scheme: dark;
+  --space-3xs: 2px; --space-2xs: 4px; --space-xs: 8px; --space-sm: 12px; --space-md: 16px; --space-lg: 24px; --space-xl: 40px; --space-2xl: 64px; --space-3xl: 96px; --space-4xl: 144px;
+  --text-xs: 0.75rem; --text-sm: 0.875rem; --text-md: 1rem; --text-lg: 1.2rem; --text-xl: 1.44rem; --text-2xl: 1.728rem; --text-3xl: 2.074rem;
+  --text-display-s: 1.44rem; --text-display: 1.728rem; --text-section: 1.2rem; --text-title: 1rem; --text-lead: 1rem;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1); --ease-in: cubic-bezier(0.7, 0, 0.84, 0); --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-micro: 120ms; --dur-short: 220ms; --dur-long: 420ms;
+  --color-error: oklch(72% 0.15 27); --color-success: oklch(76% 0.13 150);
+  --container: 1440px; --gutter: 64px; --gap-columns: 32px; --section-gap-s: 120px; --section-gap: 144px; --section-gap-l: 176px;
+  --z-base: 1; --z-raised: 10; --z-dropdown: 100; --z-sticky: 200; --z-sticky-nav: 300; --z-modal: 400; --z-toast: 500; --z-tooltip: 600;
+  --color-paper: oklch(17% 0.008 250); --color-paper-2: oklch(21% 0.009 250); --color-paper-3: oklch(13.5% 0.007 250);
+  --color-ink: oklch(95% 0.005 250); --color-ink-2: oklch(83% 0.008 250); --color-muted: oklch(71% 0.01 250);
+  --color-rule: oklch(31% 0.01 250); --color-rule-2: oklch(42% 0.012 250);
+  --color-accent: oklch(82% 0.15 80); --color-accent-ink: oklch(18% 0.04 75); --color-accent-soft: oklch(29% 0.05 80); --color-focus: oklch(82% 0.15 80);
+  --color-cool: oklch(77% 0.12 245); --color-cool-soft: oklch(29% 0.05 245);
+  --color-ok: oklch(76% 0.15 150); --color-ok-soft: oklch(24.5% 0.03 150); --color-bad: oklch(70% 0.17 25); --color-bad-soft: oklch(24.5% 0.035 25);
+  --font-display: "Host Grotesk", ui-sans-serif, system-ui, sans-serif; --font-body: var(--font-display);
+  --font-outlier: "Atkinson Hyperlegible Mono", ui-monospace, monospace;
+  --radius-card: 10px; --radius-pill: 6px; --rule-hair: 1px;
+  --shadow-card: none;
+  --tracking-display: -0.03em; --display-weight: 500;
+
+  /* 应用密度：控件 32px，命中区 44px（app range） */
+  --control-h: 32px;
+  --control-h-sm: 26px;
+  --hit-area: 44px;
+  --row-h: 34px;
+  --bar-h: 52px;
+  --rail-w: 244px;
+  --panel-w: 420px;
+}
+/* 风险等级：与漏洞详情面板、节点标记、报告共用一套色 */
+:root {
+  --risk-critical: oklch(64% 0.2 22);
+  --risk-critical-soft: oklch(26% 0.06 22);
+  --risk-high: oklch(73% 0.16 48);
+  --risk-high-soft: oklch(27.5% 0.05 48);
+  --risk-medium: oklch(81% 0.14 88);
+  --risk-medium-soft: oklch(28% 0.04 88);
+  --risk-low: oklch(75% 0.11 245);
+  --risk-low-soft: oklch(27% 0.04 245);
+  --risk-info: oklch(71% 0.01 250);
+  --risk-info-soft: oklch(24% 0.008 250);
+  /* 导出用纸面色：报告是白底文档，与暗色工作台分开 */
+  --sheet-paper: #ffffff;
+  --sheet-ink: #18181b;
+  --sheet-ink-2: #3f3f46;
+  --sheet-muted: #71717a;
+  --sheet-rule: #e4e4e7;
+  --sheet-band: #f4f4f5;
+  /* 抽屉遮罩与投影 */
+  --color-scrim: oklch(10% 0.01 250 / 0.55);
+  --font-doc: 'Microsoft YaHei', 'PingFang SC', 'Noto Sans SC', sans-serif;
+  --shadow-sheet: 0 18px 48px -24px oklch(0% 0 0 / 0.55);
+  --shadow-panel: -24px 0 48px -24px oklch(0% 0 0 / 0.5);
+}

@@ -1,0 +1,22 @@
+# 依赖与构建产物
+node_modules/
+frontend/dist/
+backend/target/
+
+# 本地数据（数据库、上传图标、密钥）
+data/
+backend/data/
+
+# 环境变量
+.env
+.env.local
+
+# 调试产物
+.tmp/
+*.log
+
+# 编辑器
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
