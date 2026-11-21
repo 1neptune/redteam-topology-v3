@@ -27,7 +27,7 @@ RUN cargo build --release
 # ---------- 运行时 ----------
 FROM debian:bookworm-slim
 LABEL org.opencontainers.image.title="RedTeam Atlas" \
-      org.opencontainers.image.version="3.5.0"
+      org.opencontainers.image.version="3.6.0"
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates tini curl gosu \

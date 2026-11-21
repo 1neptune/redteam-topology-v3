@@ -3,6 +3,20 @@
 官网 <https://github.com/1neptune/redteam-topology-v3>
 发布页 <https://github.com/1neptune/redteam-topology-v3/releases>
 
+## v3.6.0
+
+### 新增
+
+- `scripts/deploy.sh`：服务器生产环境一键部署脚本。
+  - 自动生成 `.env`，随机填充 JWT 与主密钥，口令留空则生成满足策略的 16 位口令
+  - 创建宿主机数据目录、检测端口占用、构建镜像、启动、轮询健康检查、打印入口与初始口令
+  - `--yes` 全默认非交互，`--recreate` 重新生成配置（旧配置自动备份），`--status` 只看状态
+  - 重复执行不破坏已有数据：`.env` 与数据目录已存在时原样保留
+
+### 变更
+
+- README 的 Docker 部署章节改为以 `scripts/deploy.sh` 为主路径，保留手动做法作为备选。
+- 版本号统一升到 3.6.0。
 ## v3.5.0
 
 ### 新增

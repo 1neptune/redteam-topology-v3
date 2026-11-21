@@ -110,7 +110,59 @@ Vite 带热更新，`/api` 与 `/mcp` 代理到 `8080`。
 
 ## 服务器生产环境 Docker 部署
 
-**1. 准备环境变量**
+用仓库自带的一键脚本，从零到能访问只跑一条命令。
+
+```bash
+git clone https://github.com/1neptune/redteam-topology-v3.git /opt/atlas
+cd /opt/atlas
+chmod +x scripts/deploy.sh        # 首次需要赋执行权限
+
+sudo ./scripts/deploy.sh
+```
+
+交互式问三项（端口、管理员用户名、初始口令），其余全自动。不想回答问题加 `--yes`。
+
+**脚本做的事**
+
+1. 检查 Docker 与 compose 是否可用、Docker 守护进程是否在跑、当前目录是否为项目根
+2. 生成 `.env`：随机 64 位十六进制填充 `ATLAS_JWT_SECRET` 与 `ATLAS_SECRET`；口令留空则自动生成一个满足「8 位含大小写」的 16 位口令
+3. 创建宿主机数据目录 `/data/atlas`（已存在则跳过，不动里面的数据）
+4. 端口占用检测，被占时直接报出占用进程
+5. `docker compose build --pull` 构建镜像
+6. `docker compose up -d` 启动容器
+7. 轮询健康检查 80 秒，不通就打印最近 60 行日志并中止
+8. 打印访问地址、管理员账号、初始口令与常用命令
+
+**参数**
+
+| 参数 | 作用 |
+| --- | --- |
+| `--yes` / `-y` | 全部用默认值，不交互 |
+| `--recreate` | 配置已存在也重新生成 `.env`（会换密钥，旧配置自动备份） |
+| `--status` | 只看容器状态与健康检查结果 |
+
+**可用环境变量**（不设则交互或取默认）
+
+| 变量 | 默认 | 说明 |
+| --- | --- | --- |
+| `ATLAS_PORT` | `8080` | 对外端口 |
+| `ATLAS_ADMIN_USER` | `admin` | 初始管理员用户名 |
+| `ATLAS_ADMIN_PASSWORD` | 自动生成 | 初始管理员口令 |
+| `ATLAS_DATA_DIR_HOST` | `/data/atlas` | 宿主机数据目录 |
+| `ATLAS_JWT_SECRET` | 自动生成 | JWT 签名密钥 |
+| `ATLAS_SECRET` | 自动生成 | 拓扑加密主密钥 |
+
+非交互部署：
+
+```bash
+sudo ATLAS_PORT=8080 ATLAS_ADMIN_PASSWORD='Your#Pass2026' ./scripts/deploy.sh --yes
+```
+
+**幂等**
+
+重复执行不会破坏已有数据：`.env` 已存在就原样保留（密钥不变，历史拓扑仍可解密），数据目录已存在就跳过，容器用 `up -d` 覆盖而非重建。要换密钥得显式加 `--recreate`。
+
+**手动做法**（脚本不可用时）
 
 ```bash
 cat > .env <<'EOF'
@@ -120,25 +172,13 @@ ATLAS_SECRET=换成主密钥口令
 ATLAS_ADMIN_USER=admin
 ATLAS_ADMIN_PASSWORD=换成满足规则的初始口令
 EOF
+
+docker compose build
+docker compose up -d
+docker compose logs -f atlas     # 启动日志里有初始管理员口令
 ```
 
 `ATLAS_JWT_SECRET` 为空时每次启动随机生成，重启后所有人被登出；`ATLAS_SECRET` 决定拓扑能否解密，换掉等于让历史拓扑不可读。
-
-**2. 构建并启动**
-
-```bash
-docker compose build
-docker compose up -d
-```
-
-**3. 确认**
-
-```bash
-docker compose logs -f atlas     # 启动日志里有初始管理员口令
-docker compose ps                # 健康状态
-```
-
-访问 `http://<服务器IP>:8080`。
 
 数据落在宿主机 `/data/atlas`，由容器入口脚本修正属主后降权运行，目录无需预先创建。
 
