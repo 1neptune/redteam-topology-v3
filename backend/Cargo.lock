@@ -1409,7 +1409,7 @@ dependencies = [
 
 [[package]]
 name = "redteam-atlas"
-version = "3.6.3"
+version = "3.7.1"
 dependencies = [
  "aes-gcm",
  "argon2",

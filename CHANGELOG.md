@@ -3,6 +3,24 @@
 官网 <https://github.com/1neptune/redteam-topology-v3>
 发布页 <https://github.com/1neptune/redteam-topology-v3/releases>
 
+## v3.7.1
+
+### 修复
+
+- **「检查更新」一直显示已是最新。** 两处叠加：`/api/system/version` 的 `latest` 只读本地
+  `update.json`，而前端让浏览器直连 `api.github.com`。浏览器所在网络通常连不上 GitHub，
+  本地清单又没人写，于是永远拿不到新版本。
+- 版本查询改由后端负责，浏览器不再直连 GitHub：
+  - 优先读 `update.json`（服务器上由部署/升级脚本写入，最快最稳）
+  - 没有清单时后端去查 GitHub Releases，结果缓存 5 分钟
+  - 两者都拿不到就如实返回 `source: "none"`，界面说明原因，而不是假装已是最新
+- `deploy.sh` 与 `upgrade.sh` 在完成时把当前版本写进 `{数据目录}/update.json`，
+  顺手从 CHANGELOG 摘一段作为更新说明。
+
+### 变更
+
+- 「检查更新」对话框新增「版本来源」一行：本地清单 / GitHub Releases / 未取到。
+- 版本号升到 3.7.1。
 ## v3.7.0
 
 ### 新增

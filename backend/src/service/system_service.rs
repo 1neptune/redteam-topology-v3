@@ -44,24 +44,125 @@ fn read_manifest(cfg: &Config) -> Option<UpdateManifest> {
     }
 }
 
+/// 后端代查 GitHub 最新发布的结果，带 5 分钟缓存。
+///
+/// 前端不再直连 api.github.com：浏览器所在网络经常连不上 GitHub，
+/// 而服务器通常可以（或至少能通过 update.json 拿到）。
+fn github_latest(repo: &str) -> Option<(String, String, i64)> {
+    use std::sync::{Mutex, OnceLock};
+    use std::time::{Duration, Instant};
+
+    struct Cached {
+        at: Instant,
+        value: Option<(String, String, i64)>,
+    }
+
+    static CACHE: OnceLock<Mutex<Cached>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| {
+        Mutex::new(Cached {
+            at: Instant::now() - Duration::from_secs(3600),
+            value: None,
+        })
+    });
+
+    if let Ok(guard) = cache.lock() {
+        if guard.at.elapsed() < Duration::from_secs(300) {
+            return guard.value.clone();
+        }
+    }
+
+    let value = fetch_github_latest(repo);
+    if let Ok(mut guard) = cache.lock() {
+        guard.at = Instant::now();
+        guard.value = value.clone();
+    }
+    value
+}
+
+/// 真正去打一次 GitHub API；任何失败都返回 None，不抛错
+fn fetch_github_latest(repo: &str) -> Option<(String, String, i64)> {
+    let url = format!("https://api.github.com/repos/{repo}/releases/latest");
+    let response = ureq::get(&url)
+        .set("Accept", "application/vnd.github+json")
+        .set("User-Agent", "redteam-atlas")
+        .timeout(std::time::Duration::from_secs(8))
+        .call()
+        .map_err(|err| tracing::debug!(error = %err, "查询 GitHub 最新版本失败"))
+        .ok()?;
+    let body = response
+        .into_json::<serde_json::Value>()
+        .map_err(|err| tracing::debug!(error = %err, "解析 GitHub 发布信息失败"))
+        .ok()?;
+
+    let tag = body.get("tag_name")?.as_str()?.trim().to_string();
+    let version = tag.trim_start_matches(['v', 'V']).to_string();
+    if version.is_empty() {
+        return None;
+    }
+    let notes = body
+        .get("body")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .chars()
+        .take(4000)
+        .collect::<String>();
+    // published_at 是 ISO 时间，只取日期部分够用
+    let published_at = body
+        .get("published_at")
+        .and_then(|v| v.as_str())
+        .and_then(|raw| raw.get(0..10))
+        .and_then(|date| {
+            let mut parts = date.split('-');
+            let y: i64 = parts.next()?.parse().ok()?;
+            let m: i64 = parts.next()?.parse().ok()?;
+            let d: i64 = parts.next()?.parse().ok()?;
+            Some(days_to_ms(y, m, d))
+        })
+        .unwrap_or(0);
+
+    Some((version, notes, published_at))
+}
+
+/// 粗略把年月日换算成毫秒时间戳，只用于展示
+fn days_to_ms(year: i64, month: i64, day: i64) -> i64 {
+    // 从 1970 起算的近似天数：够精确到日即可
+    let mut days = (year - 1970) * 365 + (year - 1969) / 4;
+    let month_days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    for index in 0..(month - 1).clamp(0, 11) as usize {
+        days += month_days[index];
+    }
+    if month > 2 && year % 4 == 0 {
+        days += 1;
+    }
+    days += day - 1;
+    days * 86_400_000
+}
 /// 组装版本信息
 pub fn version_info(cfg: &Config) -> Result<VersionInfo, AppError> {
     let current = env!("CARGO_PKG_VERSION").to_string();
     let checked_at = crate::service::now_ms();
     let manifest = read_manifest(cfg);
 
+    let repo_for_check = cfg.update_repo.trim().to_string();
+    // 来源优先级：本地 update.json（服务器上由升级脚本写入，最稳）→ GitHub API
     let (latest, notes, published_at, source, update_available) = match manifest {
         Some(item) => {
             let newer = is_newer(&item.version, &current);
             (item.version, item.notes, item.published_at, "manifest".to_string(), newer)
         }
-        None => (
-            current.clone(),
-            String::new(),
-            None,
-            "none".to_string(),
-            false,
-        ),
+        None => match github_latest(&repo_for_check) {
+            Some((version, notes, published_at)) => {
+                let newer = is_newer(&version, &current);
+                (
+                    version,
+                    notes,
+                    (published_at > 0).then_some(published_at),
+                    "github".to_string(),
+                    newer,
+                )
+            }
+            None => (current.clone(), String::new(), None, "none".to_string(), false),
+        },
     };
 
     let repo = cfg.update_repo.trim().to_string();

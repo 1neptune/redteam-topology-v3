@@ -184,6 +184,22 @@ check_port() {
   fi
 }
 
+# ── 版本清单 ───────────────────────────────────────────────
+# 容器内往往连不上 GitHub，「检查更新」读这份清单来判断有没有新版本。
+write_manifest() {
+  local version="$1"
+  local dir="${ATLAS_DATA_DIR_HOST:-/data/atlas}"
+  [ -d "$dir" ] || return 0
+  cat > "$dir/update.json" <<EOF
+{
+  "version": "$version",
+  "notes": "",
+  "publishedAt": $(date +%s)000
+}
+EOF
+  chmod 644 "$dir/update.json" 2>/dev/null || true
+  ok "已写入版本清单 $dir/update.json（版本 $version）"
+}
 # ── 部署 ──────────────────────────────────────────────────
 wait_healthy() {
   local url="http://127.0.0.1:$1/"
@@ -239,6 +255,11 @@ do_deploy() {
   else
     printf '  初始口令   见 .env 的 ATLAS_ADMIN_PASSWORD（已有账号时不生效）\n'
   fi
+  # 首次部署就把当前版本写进清单，后续「检查更新」才有对比基准
+  local cur
+  cur="$(grep -m1 '^version' backend/Cargo.toml 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo '')"
+  [ -n "$cur" ] && write_manifest "$cur"
+  printf '  版本       %s\n' "${cur:-未知}"
   printf '  数据目录   %s\n' "${ATLAS_DATA_DIR_HOST:-/data/atlas}"
   printf '\n'
   printf '常用命令：\n'

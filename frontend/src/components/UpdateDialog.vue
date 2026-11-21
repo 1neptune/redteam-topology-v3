@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { fetchLatestRelease, fetchVersion, isNewerVersion, runUpgrade } from '@/api/system'
+import { fetchVersion, isNewerVersion, runUpgrade } from '@/api/system'
 import { useUiStore } from '@/stores/ui'
-import type { GithubRelease, VersionInfo } from '@/types'
+import type { VersionInfo } from '@/types'
 
 const props = defineProps<{ visible: boolean }>()
 const emit = defineEmits<{ close: [] }>()
@@ -10,16 +10,28 @@ const emit = defineEmits<{ close: [] }>()
 const ui = useUiStore()
 
 const info = ref<VersionInfo | null>(null)
-const release = ref<GithubRelease | null>(null)
 const loading = ref(true)
 const phase = ref<'idle' | 'downloading' | 'restarting' | 'done'>('idle')
+const error = ref('')
 const note = ref('')
 
-/** 最新版本：优先官网 Releases，取不到时用本机已知值 */
+/** 最新版本：全部来自后端（manifest 或 GitHub，后端已做缓存与降级） */
 const latest = computed(() => {
-  const version = release.value?.tagName.replace(/^v/i, '') ?? info.value?.latest ?? ''
-  const newer = release.value ? isNewerVersion(release.value.tagName, info.value?.current ?? '') : !!info.value?.updateAvailable
+  const version = info.value?.latest ?? ''
+  const newer = !!info.value?.updateAvailable && isNewerVersion(version, info.value?.current ?? '')
   return { version, newer }
+})
+
+/** 版本来源的可读说明 */
+const sourceText = computed(() => {
+  switch (info.value?.source) {
+    case 'manifest':
+      return '来自本地版本清单'
+    case 'github':
+      return '来自 GitHub Releases'
+    default:
+      return '未取到最新版本信息'
+  }
 })
 
 const canUpgrade = computed(() => latest.value.newer && phase.value === 'idle')
@@ -36,15 +48,20 @@ watch(
   { immediate: true },
 )
 
-/** 查一次本机版本与官网最新发布 */
+/**
+ * 查一次版本信息。
+ *
+ * 只问后端：浏览器直连 api.github.com 在很多网络下是不通的，
+ * 由服务端代查（并缓存），拿不到时后端会如实返回 source: none。
+ */
 async function check(): Promise<void> {
   loading.value = true
-  release.value = null
+
+  error.value = ''
   try {
     info.value = await fetchVersion()
-    release.value = await fetchLatestRelease(info.value.checkUrl)
-  } catch {
-    // 取不到就只显示当前版本，不打断使用
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : '读取版本信息失败'
   } finally {
     loading.value = false
   }
@@ -134,7 +151,16 @@ async function copyCommand(): Promise<void> {
               {{ loading ? '检查中' : latest.version || '—' }}
             </b>
           </div>
+          <div class="ver__row">
+            <span>版本来源</span>
+            <b class="ver__src">{{ loading ? '—' : sourceText }}</b>
+          </div>
         </div>
+
+        <p v-if="error" class="ver__note is-err">{{ error }}</p>
+        <p v-else-if="!loading && !latest.newer && info?.source === 'none'" class="ver__note">
+          服务端连不上 GitHub，也没有本地版本清单。在宿主机执行升级脚本会自动写入清单。
+        </p>
 
         <p v-if="note" class="ver__note">{{ note }}</p>
 
@@ -195,6 +221,16 @@ async function copyCommand(): Promise<void> {
 
 .ver__row b.is-new {
   color: var(--color-accent);
+}
+
+.ver__src {
+  font-size: var(--text-xs);
+  font-weight: 400;
+  color: var(--color-muted);
+}
+
+.ver__note.is-err {
+  color: var(--color-danger);
 }
 
 .ver__cmd {
