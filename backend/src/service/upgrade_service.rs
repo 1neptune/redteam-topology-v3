@@ -22,6 +22,10 @@ use crate::error::AppError;
 pub struct UpgradeResult {
     pub from: String,
     pub to: String,
+    /// binary：已下载新二进制并重启；manual：容器部署，需在宿主机执行命令
+    pub mode: String,
+    /// manual 模式下要在宿主机执行的命令
+    pub command: String,
     /// 下载到的资产文件名
     pub asset: String,
     /// 落盘路径
@@ -217,18 +221,29 @@ fn spawn_script(script: &Path) -> Result<(), AppError> {
 /// 执行一键更新
 pub fn upgrade(cfg: &Config) -> Result<UpgradeResult, AppError> {
     if in_container() {
-        // 容器不能重建自身：把版本对比做出来，让宿主侧脚本接管
+        // 容器不能重建自身。与其抛一个 400 让人猜，不如把版本对比与要执行的命令
+        // 一起返回，前端按 mode 渲染成「在宿主机执行这条」。
+        let current = env!("CARGO_PKG_VERSION").to_string();
         let latest = std::panic::catch_unwind(|| latest_release(cfg.update_repo.trim()))
             .ok()
             .and_then(Result::ok)
-            .and_then(|r| r.get("tag_name").and_then(|v| v.as_str()).map(str::to_string));
-        let hint = match latest {
-            Some(tag) => format!(
-                "容器部署请在宿主机运行 ./scripts/upgrade.sh（最新版本 {tag}）"
-            ),
-            None => "容器部署请在宿主机运行 ./scripts/upgrade.sh".to_string(),
-        };
-        return Err(AppError::BadRequest(hint));
+            .and_then(|r| {
+                r.get("tag_name")
+                    .and_then(|v| v.as_str())
+                    .map(|tag| tag.trim_start_matches(['v', 'V']).to_string())
+            })
+            .unwrap_or_else(|| current.clone());
+        return Ok(UpgradeResult {
+            from: current,
+            to: latest,
+            mode: "manual".to_string(),
+            command: "./scripts/upgrade.sh".to_string(),
+            asset: String::new(),
+            staged: String::new(),
+            bytes: 0,
+            script: String::new(),
+            restarting: false,
+        });
     }
 
     let current = env!("CARGO_PKG_VERSION").to_string();
@@ -300,6 +315,8 @@ pub fn upgrade(cfg: &Config) -> Result<UpgradeResult, AppError> {
     Ok(UpgradeResult {
         from: current,
         to: latest,
+        mode: "binary".to_string(),
+        command: String::new(),
         asset: asset_name,
         staged: staged.display().to_string(),
         bytes,

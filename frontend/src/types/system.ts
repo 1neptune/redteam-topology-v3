@@ -44,6 +44,10 @@ export interface GithubRelease {
 export interface UpgradeResult {
   from: string
   to: string
+  /** binary：已下载并重启；manual：容器部署，需在宿主机执行 command */
+  mode: 'binary' | 'manual'
+  /** manual 模式下要在宿主机执行的命令 */
+  command: string
   /** 下载到的资产文件名 */
   asset: string
   /** 落盘路径 */

@@ -3,6 +3,19 @@
 官网 <https://github.com/1neptune/redteam-topology-v3>
 发布页 <https://github.com/1neptune/redteam-topology-v3/releases>
 
+## v3.7.0
+
+### 新增
+
+- 一键更新支持容器部署。此前在容器里点「一键更新」只返回 400 错误提示；现在返回结构化结果
+  （`mode: "manual"` + `to` + `command`），界面上直接显示要执行的命令并支持一键复制。
+- `UpgradeResult` 新增 `mode`（`binary` / `manual`）与 `command` 两个字段，二进制部署与容器部署走同一条接口。
+
+### 说明
+
+- 容器不能重建自身，这是 Docker 的固有限制。界面给出的是宿主侧要执行的 `./scripts/upgrade.sh`，
+  真正的构建与重启由它完成，并带备份与失败回滚。
+- 版本号升到 3.7.0，用于验证「检查更新 → 识别新版本 → 一键更新」整条链路。
 ## v3.6.3
 
 ### 变更

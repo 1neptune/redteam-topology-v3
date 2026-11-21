@@ -78,13 +78,24 @@ async function waitRestart(target: string): Promise<void> {
   note.value = '重启超时，请手动确认服务状态'
 }
 
+/** 容器部署时后端返回的升级命令 */
+const manualCommand = ref('')
+
 /** 一键更新 */
 async function upgrade(): Promise<void> {
   if (!canUpgrade.value) return
   phase.value = 'downloading'
   note.value = ''
+  manualCommand.value = ''
   try {
     const result = await runUpgrade()
+    if (result.mode === 'manual') {
+      // 容器不能重建自身：把要在宿主机跑的命令显示出来，用户复制即可
+      phase.value = 'idle'
+      manualCommand.value = result.command || './scripts/upgrade.sh'
+      note.value = `容器部署：在宿主机执行下面的命令升级到 ${result.to}`
+      return
+    }
     phase.value = 'restarting'
     note.value = `已下载 ${(result.bytes / 1048576).toFixed(1)} MB，正在重启`
     await waitRestart(result.to)
@@ -92,6 +103,16 @@ async function upgrade(): Promise<void> {
     phase.value = 'idle'
     note.value = err instanceof Error ? err.message : '更新失败'
     ui.toast(note.value, 'error')
+  }
+}
+
+/** 复制命令到剪贴板 */
+async function copyCommand(): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(manualCommand.value)
+    ui.toast('命令已复制', 'ok')
+  } catch {
+    ui.toast('复制失败，请手动选中', 'error')
   }
 }
 </script>
@@ -116,6 +137,12 @@ async function upgrade(): Promise<void> {
         </div>
 
         <p v-if="note" class="ver__note">{{ note }}</p>
+
+        <!-- 容器部署：给出要在宿主机跑的命令，一键复制 -->
+        <div v-if="manualCommand" class="ver__cmd">
+          <code class="ver__cmd-text mono">cd /opt/atlas && {{ manualCommand }}</code>
+          <button class="btn btn--sm btn--ghost" @click="copyCommand">复制</button>
+        </div>
       </div>
 
       <div class="modal__foot">
@@ -168,6 +195,26 @@ async function upgrade(): Promise<void> {
 
 .ver__row b.is-new {
   color: var(--color-accent);
+}
+
+.ver__cmd {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--color-sunken);
+  border: var(--rule-hair) solid var(--color-rule);
+  border-radius: var(--radius-sm);
+}
+
+.ver__cmd-text {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-xs);
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+  user-select: all;
 }
 
 .ver__note {
