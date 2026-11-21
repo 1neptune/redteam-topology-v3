@@ -16,9 +16,7 @@ pub struct Config {
     pub upload_max_bytes: usize,
     pub bootstrap_admin: String,
     pub bootstrap_password: Option<String>,
-    /// 更新清单文件（升级脚本写入，离线环境兜底）
-    pub update_file: PathBuf,
-    /// 官网仓库 owner/name，用于「检查更新」查询 GitHub Releases
+    /// 仓库 owner/name，只用于在界面上给出仓库与发布页地址
     pub update_repo: String,
     /// 拓扑加密主密钥（AES-256）
     pub master_key: [u8; 32],
@@ -35,9 +33,6 @@ impl Config {
         std::fs::create_dir_all(&data_dir).map_err(|e| format!("创建数据目录失败: {e}"))?;
         let upload_dir = data_dir.join("uploads");
         std::fs::create_dir_all(&upload_dir).map_err(|e| format!("创建上传目录失败: {e}"))?;
-        let update_file = std::env::var("ATLAS_UPDATE_FILE")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| data_dir.join("update.json"));
 
         let database_url = env_or(
             "ATLAS_DATABASE_URL",
@@ -95,7 +90,6 @@ impl Config {
                 .unwrap_or(2 * 1024 * 1024),
             bootstrap_admin: env_or("ATLAS_ADMIN_USER", "admin"),
             bootstrap_password: std::env::var("ATLAS_ADMIN_PASSWORD").ok().filter(|v| !v.is_empty()),
-            update_file,
             update_repo: env_or("ATLAS_UPDATE_REPO", "1neptune/redteam-topology-v3"),
             master_key,
         }))

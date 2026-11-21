@@ -19,7 +19,8 @@
 
 - 升级只有命令行一条路：`scripts/upgrade.sh`。容器无法重建自身，界面上点一下也只能提示去
   宿主机执行；二进制部署的替换重启又依赖进程退出。统一用脚本，行为可预期、可回滚、有日志。
-- 移除 `update.json` 版本清单的读写。`deploy.sh` 与 `upgrade.sh` 不再生成该文件。
+- 移除 `update.json` 版本清单的读写。`deploy.sh` 与 `upgrade.sh` 不再生成该文件，
+  `Config` 的 `update_file` 字段与 `ATLAS_UPDATE_FILE` 环境变量一并删除。
 
 ### 破坏性
 

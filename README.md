@@ -10,7 +10,7 @@
 
 **项目与状态**：按项目组织工作，每个项目有进行中 / 已完成两种状态，成员按 owner / editor / viewer 三档授权。
 
-**攻击路径画布**：十六种内置资产组件，拖拽到无限画布；节点间拖连接点建立链路。资产属性覆盖 IP、端口、域名、操作系统、自定义字段与四档控制状态。
+**攻击路径画布**：十六种内置资产组件，拖拽到无限画布；节点间拖连接点建立链路。资产属性覆盖 IP、端口、域名、操作系统、自定义字段与四档控制状态。支持撤销、一键格式化，可导出 PNG（先预览再保存）与 `.atlas.json` 配置。
 
 **漏洞与报告**：一个资产可挂多条漏洞，每条含名称、风险等级、漏洞说明、渗透测试详情（富文本，可插图）与处置建议。报告可预览、导出 Word 与 PDF。
 
@@ -213,7 +213,7 @@ chmod +x scripts/upgrade.sh     # 首次需要赋执行权限
 
 ./scripts/upgrade.sh --check    # 只看当前版本与远端最新版本
 ./scripts/upgrade.sh            # 升级到远端最新
-./scripts/upgrade.sh v3.5.0     # 钉到指定 tag
+./scripts/upgrade.sh v4.0.0     # 钉到指定 tag
 ./scripts/upgrade.sh --rollback # 回滚到上一次升级前
 ```
 
@@ -247,17 +247,11 @@ docker compose logs -f atlas
 
 数据库迁移在启动时自动执行，无需手工跑 SQL。已应用的迁移文件不能再改，要调整就新增一个迁移。
 
-版本信息的来源按顺序是：
-
-1. `{数据目录}/update.json` —— `deploy.sh` 与 `upgrade.sh` 会自动写入，最快最稳
-2. GitHub Releases 的 `releases/latest` —— 由**后端**代查（浏览器不直连 GitHub），结果缓存 5 分钟
-3. 两者都拿不到时如实显示「未取到最新版本信息」，不会假装已是最新
-
-对话框里有一行「版本来源」，能看到当前用的是哪一条。
-
 **升级只有一种方式：命令行**
 
 界面不提供「检查更新 / 一键更新」。容器无法重建自身，界面上点一下也只能提示去宿主机执行；二进制部署的替换重启又依赖进程退出，容易做成半截状态。统一用脚本，行为可预期、可回滚、有日志。
+
+`GET /api/system/version` 只返回当前版本与仓库地址，不联网、不判断有没有新版本。
 
 ---
 
@@ -270,7 +264,7 @@ docker compose logs -f atlas
 在顶部加一节，按「新增 / 变更 / 修复」分类：
 
 ```markdown
-## v3.6.0
+## v4.1.0
 
 ### 新增
 - ...
@@ -281,12 +275,12 @@ docker compose logs -f atlas
 六处一起改，漏一处就会出现「界面显示一个版本、镜像标签是另一个」：
 
 ```
-backend/Cargo.toml          version = "3.6.0"
-frontend/package.json       "version": "3.6.0"
-docker-compose.yml          image: redteam-atlas:3.6.0
-Dockerfile                  org.opencontainers.image.version="3.6.0"
-doc/openapi.md              version: 3.6.0
-doc/mcp.md                  serverInfo.version: 3.6.0
+backend/Cargo.toml          version = "4.1.0"
+frontend/package.json       "version": "4.1.0"
+docker-compose.yml          image: redteam-atlas:4.1.0
+Dockerfile                  org.opencontainers.image.version="4.1.0"
+doc/openapi.md              version: 4.1.0
+doc/mcp.md                  serverInfo.version: 4.1.0
 ```
 
 **3. 提交并打 tag**
@@ -294,7 +288,7 @@ doc/mcp.md                  serverInfo.version: 3.6.0
 ```bash
 git add -A
 git commit -m "feat: 三句话说明改了什么"
-git tag -a v3.6.0 -m "v3.6.0"
+git tag -a v4.1.0 -m "v4.1.0"
 git push origin master --tags
 ```
 
@@ -302,14 +296,14 @@ git push origin master --tags
 
 到 <https://github.com/1neptune/redteam-topology-v3/releases> 新建 Release，选刚推的 tag，正文直接粘 CHANGELOG 里那一节。
 
-必须带 `v` 前缀的 tag——前端的版本比较会剥掉开头的 `v` 再逐段比，`3.6.0` 和 `v3.6.0` 都能识别，但 Release 与 tag 名字不一致会导致 `releases/latest` 拿不到。
+必须带 `v` 前缀的 tag——`upgrade.sh --check` 靠 `git ls-remote --tags` 里 `v*` 的标签排序判断远端版本，不带前缀会漏掉。
 
-**不要勾 Pre-release**：`releases/latest` 只返回正式发布。虽然界面不再做版本检查，`upgrade.sh --check` 与发布页仍按正式版本统计。
+**不要勾 Pre-release**：`upgrade.sh --check` 用 `git ls-remote --tags` 的最新高版本号判断远端，不带 `v` 前缀或标成预发布都会被漏掉。
 
 不想点网页的话用 API 建，需要一次 `repo` 权限的 token：
 
 ```bash
-TAG=v3.6.0
+TAG=v4.1.0
 BODY=$(awk "/^## $TAG\$/,/^## v[0-9]/" CHANGELOG.md | sed '$d' | tail -n +2)
 
 curl -sS -X POST \
@@ -330,9 +324,9 @@ curl -sS https://api.github.com/repos/1neptune/redteam-topology-v3/releases/late
 
 | 改动 | 版本 |
 | --- | --- |
-| 加功能、加接口、加工具 | 次版本 +1（3.5.0 → 3.6.0） |
-| 只修 bug、改文案、调样式 | 修订号 +1（3.5.0 → 3.5.1） |
-| 破坏兼容：改接口字段、改数据表、换加密方式 | 主版本 +1（3.5.0 → 4.0.0） |
+| 加功能、加接口、加工具 | 次版本 +1（4.0.0 → 4.1.0） |
+| 只修 bug、改文案、调样式 | 修订号 +1（4.0.0 → 4.0.1） |
+| 破坏兼容：改接口字段、改数据表、换加密方式 | 主版本 +1（4.0.0 → 5.0.0） |
 
 数据库迁移算破坏兼容——旧数据不迁移就跑不起来，主版本 +1，并在 CHANGELOG 里写清楚迁移步骤。
 

@@ -130,7 +130,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         database = %cfg.database_url,
         users,
         projects,
-        update_file = %cfg.update_file.display(),
         "服务已就绪：账号由管理员创建并授权；MCP 端点为 POST /mcp"
     );
 

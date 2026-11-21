@@ -21,7 +21,6 @@ services:
       ATLAS_SECRET: "${ATLAS_SECRET:-}"
       ATLAS_ADMIN_USER: "${ATLAS_ADMIN_USER:-admin}"
       ATLAS_ADMIN_PASSWORD: "${ATLAS_ADMIN_PASSWORD:-}"
-      ATLAS_UPDATE_FILE: "${ATLAS_UPDATE_FILE:-/data/update.json}"
       RUST_LOG: "${RUST_LOG:-info}"
     volumes:
       # 数据直接落在宿主机磁盘目录：数据库、图标上传、密钥、更新清单

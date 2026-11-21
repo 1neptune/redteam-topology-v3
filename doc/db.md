@@ -26,7 +26,7 @@ users 1 ──< uploads (created_by)
 - **布尔**：`disabled`、`builtin` 用 `0/1`。
 - **主键**：`u_` / `p_` / `a_` / `img_` 前缀 + 16 位随机十六进制，便于日志辨识。
 - **加密**：`projects` 的拓扑不存明文，`data_cipher` / `data_iv` / `data_tag` 三列由应用层
-  AES-256-GCM 生成；密钥来自环境变量 `ATLAS_SECRET`（SHA-256 派生 32 字节）。
+  AES-256-GCM 生成；密钥由环境变量 `ATLAS_SECRET` 经 argon2 派生 32 字节，未设置时读取数据目录的 `secret.key`。
 - **JWT 失效**：`users.token_version` 写入 JWT 声明，改密/停用时自增，校验时比对，实现
   「改密即下线」而无需服务端会话表。
 - **审计不脱敏**：`detail` 保存字段级 diff（JSON 字符串），超过 12KB 截断。
@@ -34,7 +34,7 @@ users 1 ──< uploads (created_by)
 
 ## 3. 建表 SQL（sqlx migrate 原文）
 
-文件：`backend/migrations/0001_init.sql`
+文件：`backend/migrations/0001_init.sql`（建表）、`backend/migrations/0002_project_status.sql`（补 `projects.status`）
 
 ```sql
 CREATE TABLE users (
@@ -62,7 +62,8 @@ CREATE TABLE projects (
     data_tag    BLOB NOT NULL,
     created_at  INTEGER NOT NULL,
     updated_at  INTEGER NOT NULL,
-    updated_by  TEXT NOT NULL DEFAULT ''
+    updated_by  TEXT NOT NULL DEFAULT '',
+    status      TEXT NOT NULL DEFAULT 'active'
 );
 
 CREATE TABLE project_members (
@@ -130,6 +131,13 @@ CREATE INDEX idx_presence_seen ON presence (project_id, seen_at DESC);
 ## 4. 迁移执行
 
 应用启动时通过 `sqlx::migrate!("./migrations")` 自动执行，具备幂等性（sqlx 记录 `_sqlx_migrations` 表）。
+
+已应用的迁移文件不能再改——sqlx 会比对文件哈希，改动后启动直接报 `VersionMismatch` 拒绝运行。要调整表结构就新增一个迁移。
+
+| 迁移 | 内容 |
+| --- | --- |
+| `0001_init.sql` | 建全部基础表与索引 |
+| `0002_project_status.sql` | `projects` 增加 `status`（`active` / `done`），默认进行中 |
 也可用 CLI 手动执行：
 
 ```bash

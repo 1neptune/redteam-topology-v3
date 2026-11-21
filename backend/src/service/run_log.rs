@@ -24,7 +24,7 @@ pub fn log_dir(cfg: &Config) -> PathBuf {
             return PathBuf::from(trimmed);
         }
     }
-    cfg.update_file
+    cfg.upload_dir
         .parent()
         .map(Path::to_path_buf)
         .unwrap_or_else(|| PathBuf::from("./data"))
