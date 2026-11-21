@@ -116,27 +116,6 @@ backup() {
   echo "$dir" > "$BACKUP_DIR/.latest"
 }
 
-# ── 版本清单（容器内查不到 GitHub 时，「检查更新」靠它）─────────
-write_manifest() {
-  local version="$1" tag="$2"
-  local dir="${ATLAS_DATA_DIR_HOST:-/data/atlas}"
-  [ -d "$dir" ] || return 0
-  local notes
-  notes="$(awk -v tag="$tag" '
-    $0 == "## " tag { found = 1; next }
-    found && /^## / { exit }
-    found { print }
-  ' CHANGELOG.md 2>/dev/null | head -n 40 | sed 's/"/\\"/g' | tr '\n' '~' | sed 's/~/\\n/g')"
-  cat > "$dir/update.json" <<EOF
-{
-  "version": "$version",
-  "notes": "$notes",
-  "publishedAt": $(date +%s)000
-}
-EOF
-  chmod 644 "$dir/update.json" 2>/dev/null || true
-  ok "已写入版本清单 $dir/update.json（版本 $version）"
-}
 # ── 健康检查 ───────────────────────────────────────────────
 wait_healthy() {
   log "等待服务就绪：$HEALTH_URL"
@@ -218,10 +197,7 @@ do_upgrade() {
   compose up -d --remove-orphans || die "启动失败"
 
   if wait_healthy; then
-    local now
-    now="$(current_version)"
-    ok "升级完成：$cur → $now"
-    write_manifest "$now" "v$(echo "$now" | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+')"
+    ok "升级完成：$cur → $(current_version)"
     log "备份保留在：$(cat "$BACKUP_DIR/.latest" 2>/dev/null || echo "$BACKUP_DIR")"
     return 0
   fi

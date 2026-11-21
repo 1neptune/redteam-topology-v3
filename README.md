@@ -247,8 +247,6 @@ docker compose logs -f atlas
 
 数据库迁移在启动时自动执行，无需手工跑 SQL。已应用的迁移文件不能再改，要调整就新增一个迁移。
 
-**界面上的「检查更新」**
-
 版本信息的来源按顺序是：
 
 1. `{数据目录}/update.json` —— `deploy.sh` 与 `upgrade.sh` 会自动写入，最快最稳
@@ -257,9 +255,9 @@ docker compose logs -f atlas
 
 对话框里有一行「版本来源」，能看到当前用的是哪一条。
 
-**界面上的「一键更新」**
+**升级只有一种方式：命令行**
 
-顶栏「检查更新」按钮查的是 GitHub Releases 的 `releases/latest`，显示当前版本与最新版本。容器部署下点「一键更新」会提示最新版本号与宿主侧要执行的 `./scripts/upgrade.sh`——容器不能重建自身，这一步必须在宿主机完成。
+界面不提供「检查更新 / 一键更新」。容器无法重建自身，界面上点一下也只能提示去宿主机执行；二进制部署的替换重启又依赖进程退出，容易做成半截状态。统一用脚本，行为可预期、可回滚、有日志。
 
 ---
 
@@ -306,7 +304,7 @@ git push origin master --tags
 
 必须带 `v` 前缀的 tag——前端的版本比较会剥掉开头的 `v` 再逐段比，`3.6.0` 和 `v3.6.0` 都能识别，但 Release 与 tag 名字不一致会导致 `releases/latest` 拿不到。
 
-**不要勾 Pre-release**：`releases/latest` 只返回正式发布，勾了之后「检查更新」就会认为没有新版本。
+**不要勾 Pre-release**：`releases/latest` 只返回正式发布。虽然界面不再做版本检查，`upgrade.sh --check` 与发布页仍按正式版本统计。
 
 不想点网页的话用 API 建，需要一次 `repo` 权限的 token：
 

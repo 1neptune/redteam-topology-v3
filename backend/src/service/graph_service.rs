@@ -7,7 +7,6 @@ use crate::model::{Change, EdgeData, FieldChange, Graph, GraphEdge, GraphNode, N
 const MAX_NODES: usize = 20_000;
 const MAX_EDGES: usize = 40_000;
 const MAX_FIELDS: usize = 40;
-const MAX_TAGS: usize = 12;
 
 const NODE_STATUS: [&str; 4] = ["recon", "attack", "control", "blocked"];
 const EDGE_STATUS: [&str; 4] = ["planned", "active", "success", "failed"];

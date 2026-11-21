@@ -8,7 +8,7 @@
 openapi: 3.0.3
 info:
   title: RedTeam Atlas API
-  version: 3.7.1
+  version: 4.0.0
   description: 红队攻防资产与攻击路径拓扑平台
 servers:
   - url: http://localhost:8080/api
@@ -182,8 +182,12 @@ paths:
 
   /system/version:
     get:
-      summary: 版本与仓库信息（前端据此查询 GitHub Releases）
-      description: 返回当前版本、官网仓库与 Releases 查询地址；离线清单存在时一并给出对比结果。后端不访问外网，GitHub 查询由前端发起。
+      summary: 当前版本与仓库地址
+      description: |
+        只读本机信息，不联网、不判断有没有新版本。
+
+        界面不提供「检查更新 / 一键更新」，升级一律走命令行：容器与二进制部署都用
+        `scripts/upgrade.sh`，行为可预期、可回滚、有日志。
       security: [{ bearerAuth: [] }]
       responses:
         '200':
@@ -194,23 +198,17 @@ paths:
                 code: 200
                 msg: ok
                 data:
-                  current: 3.1.0
-                  latest: 3.2.0
-                  updateAvailable: true
-                  notes: "1. 新增攻击链路时间轴"
-                  publishedAt: 1763500000000
-                  source: manifest
+                  current: 4.0.0
                   repo: 1neptune/redteam-topology-v3
                   homepage: https://github.com/1neptune/redteam-topology-v3
                   releasesUrl: https://github.com/1neptune/redteam-topology-v3/releases
-                  checkUrl: https://api.github.com/repos/1neptune/redteam-topology-v3/releases/latest
-                  checkedAt: 1763600000000
                   upgradeHint:
-                    - "Windows：停止 atlas.exe，替换为新的 redteam-atlas.exe，再启动"
-                    - "Linux：systemctl stop atlas，覆盖 /usr/local/bin/redteam-atlas，systemctl start atlas"
-                    - "Docker：docker compose pull && docker compose up -d"
+                    - "Docker：在项目目录执行 ./scripts/upgrade.sh（备份、构建、重启、失败回滚）"
+                    - "Docker 指定版本：./scripts/upgrade.sh v4.0.0"
+                    - "二进制：停止进程，替换 redteam-atlas，再启动（数据目录保留，迁移自动执行）"
+                    - "查看版本：./scripts/upgrade.sh --check"
+                  checkedAt: 1795248534453
         '401': { $ref: '#/components/responses/Unauthorized' }
-
   /system/logs:
     get:
       summary: 运行日志（管理员）
@@ -233,39 +231,6 @@ paths:
                   rows:
                     - ["2026-11-20 15:29:31", "127.0.0.1", "GET /api/projects", "", "200", "{\"code\":200}"]
         '403': { description: 非管理员 }
-  /system/upgrade:
-    post:
-      summary: 一键更新（仅管理员）
-      description: |
-        访问 GitHub Releases 取最新版本，下载本平台的可执行文件到 `{数据目录}/upgrade/`，
-        写下替换脚本并拉起，随后本进程退出；脚本等待退出后备份旧文件、替换、再启动新进程。
-
-        容器部署直接拒绝，提示改用 `docker compose pull`。
-        没有新版本、发布未提供对应平台的 asset、网络不可达都会返回 400 与具体原因。
-      security: [{ bearerAuth: [] }]
-      responses:
-        '200':
-          description: 已下载并接管重启
-          content:
-            application/json:
-              example:
-                code: 200
-                msg: ok
-                data:
-                  from: 3.3.0
-                  to: 3.4.0
-                  asset: redteam-atlas-v3.4.0-x86_64-pc-windows-gnu.exe
-                  staged: /srv/atlas/data/upgrade/redteam-atlas.new.exe
-                  bytes: 6422528
-                  script: /srv/atlas/data/upgrade/apply.ps1
-                  restarting: true
-        '400':
-          description: 无新版本、无可用资产或网络不可达
-          content:
-            application/json:
-              example: { code: 400, msg: 1neptune/redteam-topology-v3 仓库尚未发布正式版本, data: null }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-
   /auth/login:
     post:
       summary: 登录

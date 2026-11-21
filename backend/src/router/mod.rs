@@ -28,7 +28,6 @@ pub fn build(state: AppState) -> Router {
         .route("/health", get(auth_handler::health))
         // 版本与更新检查
         .route("/system/version", get(system_handler::version))
-        .route("/system/upgrade", post(system_handler::upgrade))
         // 运行日志：接口访问与错误
         .route("/system/logs", get(system_handler::logs))
         // 用户管理（管理员）

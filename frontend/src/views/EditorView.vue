@@ -22,7 +22,6 @@ import InspectorPanel from '@/components/InspectorPanel.vue'
 import ContextMenu, { type MenuItem } from '@/components/ContextMenu.vue'
 import AssetTypeDialog from '@/components/AssetTypeDialog.vue'
 import MemberDialog from '@/components/MemberDialog.vue'
-import UpdateDialog from '@/components/UpdateDialog.vue'
 import VulnPanel from '@/components/VulnPanel.vue'
 import PngPreviewDialog from '@/components/PngPreviewDialog.vue'
 import ReportPreview from '@/components/ReportPreview.vue'
@@ -55,7 +54,6 @@ const edgeTypes = { link: markRaw(LinkEdge) as unknown as EdgeComponent } as Edg
 const wrapper = ref<HTMLElement | null>(null)
 const showTypes = ref(false)
 const showMembers = ref(false)
-const showUpdate = ref(false)
 const showVuln = ref(false)
 const vulnNode = ref<GraphNode | null>(null)
 const previewVulns = ref<Parameters<typeof editor.updateVulnerabilities>[1]>([])
@@ -593,7 +591,6 @@ async function goBack(): Promise<void> {
 
       <button class="btn btn--sm btn--ghost" :disabled="!editor.canManage" @click="showMembers = true">成员授权</button>
       <button class="btn btn--sm btn--ghost" @click="showPassword = true">修改口令</button>
-      <button class="btn btn--sm btn--ghost" @click="showUpdate = true">检查更新</button>
       <button class="btn btn--sm btn--ghost" title="撤销上一步（Ctrl+Z）" @click.stop="undo()">撤销</button>
       <button class="btn btn--sm btn--ghost" :disabled="!editor.canEdit || !editor.nodes.length" @click="editor.tidy()">格式化</button>
       <button class="btn btn--sm btn--ghost" :disabled="!editor.nodes.length" @click="openPngPreview">预览PNG</button>
@@ -713,7 +710,6 @@ async function goBack(): Promise<void> {
 
     <AssetTypeDialog :visible="showTypes" @close="showTypes = false" />
     <MemberDialog :visible="showMembers" @close="showMembers = false" />
-    <UpdateDialog :visible="showUpdate" @close="showUpdate = false" />
     <VulnPanel
       :visible="showVuln"
       :node="vulnNode"

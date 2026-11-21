@@ -3,6 +3,28 @@
 官网 <https://github.com/1neptune/redteam-topology-v3>
 发布页 <https://github.com/1neptune/redteam-topology-v3/releases>
 
+## v4.0.0
+
+### 移除
+
+- **界面上的「检查更新」与「一键更新」全部撤掉。**
+  - 删除顶栏入口与版本对话框，删除 `UpdateDialog.vue`
+  - 删除 `POST /api/system/upgrade` 接口与 `upgrade_service.rs`
+  - 删除前端直连 GitHub API 的逻辑、`fetchLatestRelease`、`runUpgrade`、`isNewerVersion`
+  - 移除 `ureq` 依赖
+- `GET /api/system/version` 收缩为只读信息：`current`、`repo`、`homepage`、`releasesUrl`、
+  `upgradeHint`、`checkedAt`。不再有 `latest`、`updateAvailable`、`notes`、`source`、`checkUrl`。
+
+### 变更
+
+- 升级只有命令行一条路：`scripts/upgrade.sh`。容器无法重建自身，界面上点一下也只能提示去
+  宿主机执行；二进制部署的替换重启又依赖进程退出。统一用脚本，行为可预期、可回滚、有日志。
+- 移除 `update.json` 版本清单的读写。`deploy.sh` 与 `upgrade.sh` 不再生成该文件。
+
+### 破坏性
+
+- 调用过 `POST /api/system/upgrade` 的集成方需要改为执行 `scripts/upgrade.sh`。
+- 读取过 `version.data.latest` / `version.data.updateAvailable` 的脚本需同步调整。
 ## v3.7.1
 
 ### 修复

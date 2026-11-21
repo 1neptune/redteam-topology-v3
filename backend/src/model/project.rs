@@ -82,7 +82,9 @@ pub struct CreateProjectRequest {
     pub description: String,
     #[serde(default)]
     pub data: Option<Graph>,
+    /// 新建时的初始状态，缺省按进行中处理
     #[serde(default)]
+    #[allow(dead_code)]
     pub status: Option<String>,
 }
 

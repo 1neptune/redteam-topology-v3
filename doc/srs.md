@@ -20,7 +20,7 @@
 | 组件 AssetType | 内置 + 自定义组件类型，图标上传与鉴权读取 |
 | 审计 Audit | 记录节点/连线/项目/授权变更，按项目与全局查询 |
 | MCP | 面向 AI Agent 的 JSON-RPC 工具集，支持 Bearer 与 Basic 两种鉴权 |
-| 系统 System | 版本信息与检查更新（读取部署方的 update.json） |
+| 系统 System | 版本查询（只读当前版本与仓库地址）与运行日志 |
 
 ## 3. 功能清单
 
@@ -90,10 +90,6 @@
 - F-40 内置组件新增「攻击者」（`attacker`），与攻击入口同属「入口 / 暴露面」分组。
 
 ### 3.9 系统与升级
-- F-30 顶栏「检查更新」按钮，展示当前版本、最新版本、更新说明与升级步骤。
-- F-31 检查更新以官网仓库 <https://github.com/1neptune/redteam-topology-v3> 的 Releases 为依据：
-  前端直连 `releases/latest`，按 `tag_name` 与当前版本逐段比较。
-- F-32 GitHub 不可达时回落到本地 `update.json`（离线清单）；两者都没有时只显示当前版本。
 - F-5a 资产属性为 IP、端口、域名、操作系统、备注与自定义字段；状态固定四档「侦察中 / 攻击中 / 已控制 / 受阻中」，四项同排。
 - F-5c 内置组件十六种，分「入口 / 暴露面」「内网资产」「网络 / 边界」「情报 / 战果」四组，不设「其它」。
 - F-5b 链路不再有标签与攻击手法，只保留状态、备注与自定义字段。
@@ -106,8 +102,9 @@
 - F-7a 用户管理支持建号、改角色、停用、重置口令与删除；最近登录按年月日时分显示。
 - F-7b 画布提供「整理」，按依赖关系分层重排节点。
 - F-33c 项目写入落文件日志：{DATA_DIR}/logs/projects.log，Tab 分隔 时间/项目/名称/操作人/动作/详情。
-- F-33b 提供「一键更新」：后端下载 Releases 中本平台的可执行文件到 `{数据目录}/upgrade/`，写下替换脚本并拉起，
-  进程退出后由脚本备份旧文件、替换、重启；脚本失败时回滚到备份。容器部署改为提示 `docker compose pull`。
+- F-30 版本查询只返回当前版本与仓库地址，不联网、不判断有没有新版本。
+- F-31 界面不提供「检查更新 / 一键更新」；升级只有命令行一条路：`scripts/upgrade.sh`。
+- F-32 升级脚本负责备份、取代码、构建、重启、健康检查，失败自动回滚。
 - F-33 数据库迁移随二进制启动自动执行，升级无需手工建表。
 
 - F-41 画布顶栏「预览PNG」：先渲染出成品图并弹窗显示（带缩放与尺寸体积），满意再保存；「导出PNG」直接落盘。
@@ -133,7 +130,6 @@
 | A-04 | POST | `/api/auth/password` | 登录 | 修改口令 |
 | A-05 | GET | `/api/auth/users` | 登录 | 成员名录（仅 id/用户名/显示名） |
 | S-01 | GET | `/api/system/version` | 登录 | 版本与仓库信息（含 Releases 查询地址） |
-| S-01b | POST | `/api/system/upgrade` | 管理员 | 一键更新：下载、替换并重启 |
 | H-01 | GET | `/api/health` | 登录 | 运维探针（版本与计数） |
 | U-01 | GET | `/api/users` | 管理员 | 用户列表 |
 | U-02 | POST | `/api/users` | 管理员 | 建号 |
@@ -224,14 +220,14 @@ redteam-topology-v3/
 ode.create/update/delete`、`edge.*`，`update` 附带字段级 diff |
 | MCP 鉴权 | `Bearer` 走 JWT 校验；`Basic` 走用户名口令校验（不签发令牌，每次请求校验账号状态） |
 | MCP 响应 | 保持 JSON-RPC 2.0 原格式（不套统一响应），工具错误以 `result.isError` 表达 |
-| 检查更新 | 读取 `ATLAS_UPDATE_FILE` 的 `{version, notes, publishedAt}`，与二进制版本逐段比较；不访问外网 |
+| 版本查询 | 只读 `CARGO_PKG_VERSION` 与仓库地址，不联网、不判断新版本；升级走 `scripts/upgrade.sh` |
 
 ## 8. 变更记录
 
 | 版本 | 内容 |
 | --- | --- |
 | v3.0.0 | 由 Node/Express 重构为 Rust Axum + sqlx；前端迁移 TypeScript；新增 JWT、MCP、组件上传、审计 |
-| v3.1.0 | 关闭自助注册，仅登录公开，其余接口一律鉴权；MCP 支持 Basic 用户名口令；新增检查更新；删除测试脚本与自检文档 |
+| v3.1.0 | 关闭自助注册，仅登录公开，其余接口一律鉴权；MCP 支持 Basic 用户名口令；删除测试脚本与自检文档 |
 | v3.1.1 | 文档：新增 doc/mcp.md（面向 Agent 的完整接入参考）；README 补 Windows 后台常驻、Docker 数据保存与 Docker 升级细则 |
 | v3.1.2 | 文档：README 增「密钥与初始管理员」（ATLAS_JWT_SECRET / ATLAS_ADMIN_PASSWORD 默认行为与示例）与「更新迭代」（Windows / Linux / Docker 三环境迭代流程、迁移只增不改的约束） |
 | v3.2.0 | 新增节点漏洞详情（双击打开，字段级审计）与 Word/PDF 报告导出；自定义组件支持 5 个内置图标；MCP 新增 `set_vulnerability`；`.env.example` 填默认值；Docker 数据改为宿主目录 `/data/atlas:/data` |

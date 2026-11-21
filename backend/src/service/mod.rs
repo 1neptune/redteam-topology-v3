@@ -8,7 +8,6 @@ pub mod project_log;
 pub mod run_log;
 pub mod project_service;
 pub mod system_service;
-pub mod upgrade_service;
 pub mod user_service;
 
 /// 当前毫秒时间戳（全库统一时间单位）

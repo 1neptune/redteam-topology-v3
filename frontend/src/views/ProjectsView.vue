@@ -6,7 +6,6 @@ import { useProjectsStore } from '@/stores/projects'
 import { useUiStore } from '@/stores/ui'
 import { downloadBlob } from '@/lib/exporter'
 import { fileStamp, formatDateTime, formatRelative, safeFilename } from '@/lib/format'
-import UpdateDialog from '@/components/UpdateDialog.vue'
 import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue'
 import UserAdminDialog from '@/components/UserAdminDialog.vue'
 import type { ExportBundle, Graph, ProjectStatus, ProjectSummary } from '@/types'
@@ -18,7 +17,6 @@ const ui = useUiStore()
 
 const showCreate = ref(false)
 const showUsers = ref(false)
-const showUpdate = ref(false)
 const showPassword = ref(false)
 const newName = ref('')
 const newDesc = ref('')
@@ -182,7 +180,6 @@ async function logout(): Promise<void> {
       </div>
 
       <button class="btn btn--sm btn--ghost" @click="showPassword = true">修改口令</button>
-      <button class="btn btn--sm btn--ghost" @click="showUpdate = true">检查更新</button>
       <button v-if="auth.isAdmin" class="btn btn--sm btn--ghost" @click="showUsers = true">用户管理</button>
       <button class="btn btn--sm btn--ghost" @click="logout">退出</button>
     </header>
@@ -331,7 +328,6 @@ async function logout(): Promise<void> {
     </div>
 
     <UserAdminDialog :visible="showUsers" @close="showUsers = false" />
-    <UpdateDialog :visible="showUpdate" @close="showUpdate = false" />
     <ChangePasswordDialog :visible="showPassword" @close="showPassword = false" />
   </div>
 </template>

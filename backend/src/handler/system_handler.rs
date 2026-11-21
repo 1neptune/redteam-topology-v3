@@ -1,4 +1,4 @@
-//! 系统信息接口（版本与更新检查）。
+//! 系统信息接口：版本查询与运行日志。
 
 use axum::extract::{Query, State};
 
@@ -7,7 +7,6 @@ use crate::error::AppError;
 use crate::model::system::VersionInfo;
 use crate::response::ApiResponse;
 use crate::service::system_service;
-use crate::service::upgrade_service::{self, UpgradeResult};
 use crate::state::AppState;
 
 /// GET /api/system/version（需登录）
@@ -18,19 +17,7 @@ pub async fn version(
     let info = system_service::version_info(&state.cfg)?;
     Ok(ApiResponse::ok(info))
 }
-/// POST /api/system/upgrade（仅管理员）
-///
-/// 下载官网最新二进制并接管重启，本进程随后退出。
-pub async fn upgrade(
-    State(state): State<AppState>,
-    user: AuthUser,
-) -> Result<ApiResponse<UpgradeResult>, AppError> {
-    if !user.is_admin() {
-        return Err(AppError::Forbidden("只有管理员可以执行更新".into()));
-    }
-    let result = upgrade_service::upgrade(&state.cfg)?;
-    Ok(ApiResponse::ok(result))
-}
+
 /// GET /api/system/logs?kind=access|error&limit=200（仅管理员）
 pub async fn logs(
     State(state): State<AppState>,
