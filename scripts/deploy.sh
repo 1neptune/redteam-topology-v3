@@ -217,8 +217,12 @@ do_deploy() {
   compose up -d --remove-orphans
 
   if ! wait_healthy "$port"; then
-    warn "健康检查未通过，最近日志："
-    compose logs --tail=60 atlas >&2 || true
+    warn "健康检查未通过，容器状态："
+    compose ps >&2 || true
+    warn "最近日志："
+    compose logs --tail=80 --no-color atlas >&2 2>&1 || true
+    warn "容器还没起来时 compose logs 可能是空的，用下面这条直接取："
+    warn "  docker logs --tail 80 redteam-atlas"
     die "部署失败。修复后重跑 ./scripts/deploy.sh，或 ./scripts/upgrade.sh --rollback"
   fi
 

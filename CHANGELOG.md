@@ -3,6 +3,19 @@
 官网 <https://github.com/1neptune/redteam-topology-v3>
 发布页 <https://github.com/1neptune/redteam-topology-v3/releases>
 
+## v3.6.1
+
+### 修复
+
+- 启动摘要与初始管理员信息改走 stderr。容器里 stdout 可能被缓冲，`docker compose logs` 拿不到内容时无从判断进程走到哪一步。
+- 优雅退出同时监听 SIGTERM。此前只响应 Ctrl+C，`docker stop` 要等 10 秒超时后被 SIGKILL。
+- 入口脚本加固：打印 uid、参数个数与目标命令；没收到命令时明确报错而不是静默退出；`gosu` 缺失时降级为直接启动。
+- 启动时补一条 `[boot] 监听 地址 / 数据目录` 日志，容器起不来时能确认是配置问题还是端口问题。
+
+### 变更
+
+- `deploy.sh` 失败时额外打印容器状态，并提示容器尚在重启循环时 `compose logs` 可能为空、要用 `docker logs` 直接取。
+- 版本号升到 3.6.1。
 ## v3.6.0
 
 ### 新增

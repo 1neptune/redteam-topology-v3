@@ -88,19 +88,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let addr = format!("{}:{}", cfg.host, cfg.port);
+    eprintln!("[boot] 监听 {addr}，数据目录 {}", cfg.upload_dir.display());
     let listener = tokio::net::TcpListener::bind(&addr).await?;
 
     // 启动摘要：版本、可访问地址、管理员账号，其余一律进 tracing
-    println!();
-    println!("RedTeam Atlas {}", env!("CARGO_PKG_VERSION"));
-    println!("{}", serve_url(&cfg.host, cfg.port));
-    println!();
+    // 一律走 stderr：容器里 stdout 可能被缓冲，日志丢了就查不出问题
+    eprintln!();
+    eprintln!("RedTeam Atlas {}", env!("CARGO_PKG_VERSION"));
+    eprintln!("{}", serve_url(&cfg.host, cfg.port));
+    eprintln!();
     match bootstrap {
         Some((user, password)) => {
             // 首次建库：此刻的口令就是刚生成的初始口令
-            println!("初始管理员");
-            println!("  用户名: {user}");
-            println!("  口令  : {password}");
+            eprintln!("初始管理员");
+            eprintln!("  用户名: {user}");
+            eprintln!("  口令  : {password}");
         }
         None => {
             // 账号已存在：口令是哈希。若 .env 里的 ATLAS_ADMIN_PASSWORD 正好能验证通过，
@@ -115,15 +117,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 _ => None,
             };
-            println!("管理员");
-            println!("  用户名: {admin}");
-            println!(
+            eprintln!("管理员");
+            eprintln!("  用户名: {admin}");
+            eprintln!(
                 "  口令  : {}",
                 from_env.unwrap_or_else(|| "已设置，忘记可在「用户管理」里重置".to_string())
             );
         }
     }
-    println!();
+    eprintln!();
     tracing::debug!(
         database = %cfg.database_url,
         users,
@@ -172,9 +174,35 @@ fn local_ip() -> Option<String> {
     socket.local_addr().ok().map(|addr| addr.ip().to_string())
 }
 
-/// 优雅退出：Ctrl+C 时关闭监听
+/// 优雅退出：Ctrl+C 与容器的 SIGTERM 都要能关掉监听。
+///
+/// 只监听 SIGINT 的话，`docker stop` 发的 SIGTERM 会先超时 10 秒再被 SIGKILL，
+/// 数据与在线状态都来不及收尾。
 async fn shutdown_signal() {
-    if let Err(err) = tokio::signal::ctrl_c().await {
-        tracing::error!(error = %err, "监听退出信号失败");
+    let ctrl_c = async {
+        if let Err(err) = tokio::signal::ctrl_c().await {
+            tracing::error!(error = %err, "监听 Ctrl+C 失败");
+        }
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut stream) => {
+                stream.recv().await;
+            }
+            Err(err) => {
+                tracing::error!(error = %err, "监听 SIGTERM 失败");
+                std::future::pending::<()>().await;
+            }
+        }
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => tracing::info!("收到 Ctrl+C，开始关闭"),
+        _ = terminate => tracing::info!("收到 SIGTERM，开始关闭"),
     }
 }
