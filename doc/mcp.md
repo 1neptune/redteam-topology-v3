@@ -112,7 +112,7 @@ curl -s http://<host>:8080/mcp \
   "result": {
     "protocolVersion": "2025-06-18",
     "capabilities": { "tools": { "listChanged": false } },
-    "serverInfo": { "name": "redteam-atlas", "version": "4.0.0" }
+    "serverInfo": { "name": "redteam-atlas", "version": "4.1.0" }
   }
 }
 ```
@@ -134,7 +134,7 @@ curl -s http://<host>:8080/mcp \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
 ```
 
-返回 19 个工具的完整 JSON Schema。
+返回 20 个工具的完整 JSON Schema。
 
 ### 3.4 调用工具
 
@@ -180,10 +180,10 @@ payload = json.loads(response["result"]["content"][0]["text"])
 
 ## 4. 工具参考
 
-共 19 个工具。权限按用途分三档：
+共 20 个工具。权限按用途分三档：
 
 - 读取类（`list_projects`、`get_project`、`search_graph`、`list_asset_types`）需对该项目有 viewer 及以上权限；
-- 写入类（`ingest_attack_path`、`add_nodes`、`add_edges`、`update_node`、`set_vulnerability`、`remove_vulnerability`、`delete_node`、`delete_edge`）需 editor 及以上；
+- 写入类（`ingest_attack_path`、`add_nodes`、`add_edges`、`update_node`、`set_vulnerability`、`remove_vulnerability`、`delete_node`、`delete_edge`、`upload_image`）需 editor 及以上；
 - 管理类（`update_project`、`delete_project`、`create_asset_type`、`add_member`）需项目 owner，`list_users`、`create_user` 需系统管理员。
 
 管理员对所有项目具备全部权限。
@@ -410,11 +410,20 @@ payload = json.loads(response["result"]["content"][0]["text"])
     "name": "任意文件上传漏洞",
     "description": "上传接口未校验文件类型与后缀，可上传 JSP 木马并直接访问执行。",
     "risk": "high",
-    "detail": "<p>1. POST /upload，multipart 上传 shell.jsp</p><p>2. 访问该路径回显 uid=0(root)</p>",
+    "detail": "1. POST /upload，multipart 上传 shell.jsp\n2. 访问该路径回显 uid=0(root)\n\n![回显截图](/api/pub/uploads/img_xxx?sig=xxx)",
     "remediation": "1. 白名单校验扩展名与 MIME\n2. 上传目录禁止脚本解析\n3. 文件重命名并存放于独立域名"
   }
 }
 ```
+
+`detail` 支持两种写法，**推荐 Markdown**：
+
+| 写法 | 说明 |
+| --- | --- |
+| Markdown | 后端自动转成 HTML。支持 `**粗体**`、`*斜体*`、`` `代码` ``、`- 无序列`、`1. 有序列`、`![说明](图片地址)` |
+| HTML | 以 `<` 开头时原样保留，可用 `<p>` `<b>` `<i>` `<ul>` `<ol>` `<li>` `<img>` `<code>` |
+
+插图要先用 [`upload_image`](#420-upload_image) 上传拿到地址，再写进 `![说明](地址)`。
 
 参数（`project_id`、`node_id` 之外都可选，只传要写的字段）：
 
@@ -606,6 +615,60 @@ payload = json.loads(response["result"]["content"][0]["text"])
 
 ---
 
+### 4.20 upload_image
+
+上传一张图片，返回带签名的短地址。给 `set_vulnerability` 的 `detail` 插图用。
+
+图片落在数据目录的 `uploads/`，地址形如 `/api/pub/uploads/img_xxx?sig=xxx`——签名随附件 id 生成，
+不带签名访问返回 404，所以这个地址可以直接写进详情与报告，不必额外鉴权。
+
+```json
+{
+  "name": "upload_image",
+  "arguments": {
+    "filename": "sqlmap-output.png",
+    "mime": "image/png",
+    "data_base64": "iVBORw0KGgoAAAANSUhEUg..."
+  }
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `data_base64` | string | 是 | 图片的 base64，不带 `data:` 前缀 |
+| `mime` | string | 否 | `image/png`（默认）、`image/jpeg`、`image/webp`、`image/gif`、`image/svg+xml` |
+| `filename` | string | 否 | 仅用于展示 |
+
+返回：
+
+```json
+{
+  "id": "img_8e96ed2129574f61a154ba78fe6fb5d3",
+  "url": "/api/pub/uploads/img_8e96ed2129574f61a154ba78fe6fb5d3?sig=918cf100eb1c0...",
+  "bytes": 48213,
+  "mime": "image/png",
+  "usage": "<img src=\"/api/pub/uploads/img_8e96ed2129574f61a154ba78fe6fb5d3?sig=918cf100eb1c0...\">"
+}
+```
+
+`usage` 是可以直接粘进 HTML 写法的片段；用 Markdown 写法则拼成 `![说明](url)`。
+
+**完整流程**
+
+```json
+// 1. 上传截图
+{"name": "upload_image", "arguments": {"mime": "image/png", "data_base64": "iVBOR..."}}
+// → url: /api/pub/uploads/img_abc?sig=def
+
+// 2. 把地址写进漏洞详情
+{"name": "set_vulnerability", "arguments": {
+  "project_id": "p_9f2c...", "node_id": "外网门户",
+  "name": "SQL 注入", "risk": "high",
+  "detail": "复现步骤\n\n1. 访问 /search?q=1\n2. 观察报错\n\n**可利用**，影响 *全站数据*。\n\n![报错页面](/api/pub/uploads/img_abc?sig=def)"
+}}
+```
+
+单张上限 2MB，超出直接报错。图片存进数据目录后不会自动清理，删库不删图。
 ## 5. 典型工作流
 
 ### 5.1 从扫描结果画一张新图
@@ -830,7 +893,7 @@ tools/call get_project { project_id }
 ```json
 {
   "protocolVersion": "2025-06-18",
-  "serverInfo": { "name": "redteam-atlas", "version": "4.0.0" }
+  "serverInfo": { "name": "redteam-atlas", "version": "4.1.0" }
 }
 ```
 
@@ -932,7 +995,7 @@ MCP 只有一次协商机会：`initialize`。
 | `true` | 工具会增删，变化时服务端主动发 `notifications/tools/list_changed` | 必须监听该通知，收到后重新拉 `tools/list` |
 | `false` | 工具集固定不变 | 拉一次 `tools/list` 就能一直缓存，不必监听 |
 
-本服务端的 19 个工具是编译进二进制的常量，运行期不增不减，因此恒为 `false`。
+本服务端的 20 个工具是编译进二进制的常量，运行期不增不减，因此恒为 `false`。
 客户端据此可以省掉一次订阅和若干次重复拉取。
 
 ### 11.7 只实现 tools，其他能力没有

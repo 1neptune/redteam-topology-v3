@@ -81,14 +81,62 @@ async function pickImage(event: Event): Promise<void> {
   }
 }
 
-/** 粘贴时只取纯文本，挡住外部样式与脚本 */
-function onPaste(event: ClipboardEvent): void {
+/**
+ * 粘贴处理。
+ *
+ * 带图片的剪贴板（截图、右键复制图片）先上传再插入；
+ * 纯文本走纯文本，挡住外部样式与脚本。
+ */
+async function onPaste(event: ClipboardEvent): Promise<void> {
   event.preventDefault()
-  const text = event.clipboardData?.getData('text/plain') ?? ''
-  document.execCommand('insertText', false, text)
-  sync()
+  const data = event.clipboardData
+  if (!data) return
+
+  // 截图与从网页复制的图片都放在 items 里
+  const imageItem = Array.from(data.items).find((item) => item.kind === 'file' && item.type.startsWith('image/'))
+  if (imageItem) {
+    const file = imageItem.getAsFile()
+    if (!file || !editor.value) return
+    uploading.value = true
+    try {
+      const url = await uploadImage(file)
+      editor.value.focus()
+      document.execCommand('insertImage', false, url)
+      sync()
+      ui.toast('图片已插入', 'ok')
+    } catch (err) {
+      ui.toast(err instanceof Error ? err.message : '粘贴图片失败', 'error')
+    } finally {
+      uploading.value = false
+    }
+    return
+  }
+
+  const text = data.getData('text/plain') ?? ''
+  if (text) {
+    document.execCommand('insertText', false, text)
+    sync()
+  }
 }
 
+/** 拖一张图片进编辑框：上传后插入到落点位置 */
+async function onDrop(event: DragEvent): Promise<void> {
+  const file = event.dataTransfer?.files?.[0]
+  if (!file || !file.type.startsWith('image/') || !editor.value) return
+  event.preventDefault()
+  uploading.value = true
+  try {
+    const url = await uploadImage(file)
+    editor.value.focus()
+    document.execCommand('insertImage', false, url)
+    sync()
+    ui.toast('图片已插入', 'ok')
+  } catch (err) {
+    ui.toast(err instanceof Error ? err.message : '插入图片失败', 'error')
+  } finally {
+    uploading.value = false
+  }
+}
 </script>
 
 <template>
@@ -114,6 +162,8 @@ function onPaste(event: ClipboardEvent): void {
       @blur="focused = false; sync()"
       @focus="focused = true"
       @paste="onPaste"
+      @drop.prevent="onDrop"
+      @dragover.prevent
     />
   </div>
 </template>

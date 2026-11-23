@@ -137,7 +137,7 @@ pub fn definitions() -> Vec<Value> {
                         "enum": ["critical", "high", "medium", "low", "info"],
                         "description": "风险等级"
                     },
-                    "detail": { "type": "string", "description": "渗透测试详情：复现步骤、请求报文、验证结果" },
+                    "detail": { "type": "string", "description": "渗透测试详情。可直接写 Markdown：**粗体**、*斜体*、`代码`、- 无序列表、1. 有序列表、![说明](图片地址)，后端自动转成 HTML；写 HTML 会原样保留。插图先调 upload_image 拿 url" },
                     "remediation": { "type": "string", "description": "处置建议" }
                 },
                 "required": ["project_id", "node_id"]
@@ -157,6 +157,18 @@ pub fn definitions() -> Vec<Value> {
             }
         }),
         json!({
+            "name": "upload_image",
+            "description": "上传一张图片给渗透测试详情用。返回带签名的短地址，直接写进 detail 的 <img src>。支持 PNG / JPEG / WebP / GIF / SVG，单张不超过 2MB。",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "filename": { "type": "string", "description": "文件名，仅用于展示" },
+                    "mime": { "type": "string", "description": "image/png、image/jpeg、image/webp、image/gif、image/svg+xml，默认 image/png" },
+                    "data_base64": { "type": "string", "description": "图片的 base64，不带 data: 前缀" }
+                },
+                "required": ["data_base64"]
+            }
+        }),        json!({
             "name": "search_graph",
             "description": "在项目内按关键字搜索节点",
             "inputSchema": {
@@ -381,6 +393,7 @@ pub async fn call(
             let node_id = arg_str(args, "node_id");
             set_vulnerability(state, user, &project_id, &node_id, args).await
         }
+        "upload_image" => upload_image(state, user, args).await,
         "remove_vulnerability" => {
             let project_id = arg_str(args, "project_id");
             let node_id = arg_str(args, "node_id");
@@ -792,7 +805,8 @@ async fn set_vulnerability(
             vuln.risk = value.to_lowercase();
         }
         if let Some(value) = text("detail") {
-            vuln.detail = value;
+            // Agent 通常写 Markdown；已经是 HTML 的原样保留
+            vuln.detail = super::richtext::markdown_to_html(&value);
         }
         if let Some(value) = text("remediation") {
             vuln.remediation = value;
@@ -829,6 +843,51 @@ async fn set_vulnerability(
 }
 
 /// 删除节点的一条漏洞记录
+/// 上传一张图片，返回可直接写进 detail 的签名地址
+async fn upload_image(state: &AppState, user: &AuthUser, payload: &Value) -> Result<Value, AppError> {
+    let data = arg_str(payload, "data_base64");
+    if data.trim().is_empty() {
+        return Err(AppError::BadRequest("data_base64 不能为空".to_string()));
+    }
+    let mime = {
+        let raw = arg_str(payload, "mime");
+        let raw = raw.trim();
+        if raw.is_empty() {
+            "image/png".to_string()
+        } else {
+            raw.to_string()
+        }
+    };
+    let filename = {
+        let raw = arg_str(payload, "filename");
+        let raw = raw.trim();
+        if raw.is_empty() {
+            "mcp-upload".to_string()
+        } else {
+            raw.to_string()
+        }
+    };
+
+    let result = crate::service::asset_service::save_upload(
+        &state.pool,
+        &state.cfg,
+        user,
+        crate::model::misc::UploadRequest {
+            filename,
+            mime,
+            data_base64: data,
+        },
+    )
+    .await?;
+
+    Ok(json!({
+        "id": result.id,
+        "url": result.url,
+        "bytes": result.bytes,
+        "mime": result.mime,
+        "usage": format!("<img src=\"{}\">", result.url),
+    }))
+}
 async fn remove_vulnerability(
     state: &AppState,
     user: &AuthUser,

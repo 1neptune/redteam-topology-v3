@@ -3,6 +3,7 @@
 //! - `Authorization: Bearer <token>`：网页/Agent 复用的 JWT
 //! - `Authorization: Basic base64(用户名:口令)`：便于只支持 HTTP 基本认证的 Agent
 
+pub mod richtext;
 pub mod tools;
 
 use axum::extract::{FromRequestParts, State};

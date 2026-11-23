@@ -3,6 +3,27 @@
 官网 <https://github.com/1neptune/redteam-topology-v3>
 发布页 <https://github.com/1neptune/redteam-topology-v3/releases>
 
+## v4.1.0
+
+### 新增
+
+- **MCP 可以用满渗透测试详情的富文本能力。**
+  - `set_vulnerability` 的 `detail` 接受 Markdown，自动转成 HTML：`**粗体**`、`*斜体*`、
+    `` `代码` ``、`- 无序列`、`1. 有序列`、`![说明](地址)`；已经是 HTML 的原样保留。
+    转换器在 `backend/src/mcp/richtext.rs`，5 个单元测试覆盖。
+  - 新增 MCP 工具 `upload_image`：传 base64 换签名地址，Agent 先上传再插进详情。
+    工具总数 19 → 20。
+- 详情编辑器支持 **Ctrl+V 粘贴图片** 与 **拖拽图片**，上传后自动插入到光标位置。
+
+### 修复
+
+- 漏洞属性面板的富文本区**没有字段标签**，用户看不到「渗透测试详情」几个字。
+  补上 `<label>`，与漏洞名称、漏洞说明、处置建议一致。
+
+### 变更
+
+- `doc/mcp.md` 补 4.20 `upload_image`，`set_vulnerability` 增加 Markdown / HTML 两种写法的说明。
+- 版本号升到 4.1.0。
 ## v4.0.0
 
 ### 移除

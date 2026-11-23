@@ -237,7 +237,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown, true))
           </div>
 
           <div class="field">
-            
+            <label class="field__label">渗透测试详情</label>
             <RichEditor :key="current.id" v-model="current.detail" :disabled="!editable" />
           </div>
 
