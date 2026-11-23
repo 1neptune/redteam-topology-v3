@@ -18,6 +18,8 @@
 
 **AI Agent 接入**：内置 MCP 服务端，20 个工具，Agent 可直接读写拓扑、上传截图写进漏洞详情。
 
+**提示词模板**：[`doc/redteam-atlas提示词.md`](doc/redteam-atlas提示词.md) 收录两段可直接粘给 Agent 的指令——一段把服务端接进 CyberStrikeAI 之类的客户端，一段把信息收集、拓扑生成与漏洞记录整套流程交代清楚。
+
 ### 项目列表
 
 按权限过滤的项目清单，含状态、资产数、链路数与最近更新时间。
@@ -35,6 +37,23 @@
 白底 A4 版面：抬头信息表、漏洞汇总表与逐条详情。预览页里可直接导出 Word 与 PDF。
 
 ![渗透测试报告](doc/images/report.png)
+
+### 接入 MCP
+
+服务端走 HTTP 传输，在客户端的 MCP 管理里填地址与凭证即可，连上后能看到 20 个工具。提示词原文见 [`doc/redteam-atlas提示词.md`](doc/redteam-atlas提示词.md)。
+
+![添加外部 MCP](doc/images/添加外部MCP提示词.png)
+
+### 红队攻防提示词
+
+一段指令交代项目、目标域名、节点属性要求与报告格式，Agent 按此完成信息收集与画布搭建：域名逐个成节点，IP、操作系统架构、应用框架、可利用漏洞写进自定义属性。
+
+![红队攻防提示词：画布结果](doc/images/红队攻防提示词1.png)
+![红队攻防提示词：导出的 PNG](doc/images/红队攻防提示词2.png)
+
+漏洞按定性分类命名，渗透测试详情与处置建议都编号分点，重点处加粗，并附测试截图。报告里可直接导出 Word 与 PDF。
+
+![红队攻防提示词：漏洞报告](doc/images/红队攻防提示词3.png)
 
 ---
 
@@ -354,8 +373,9 @@ curl -sS https://api.github.com/repos/1neptune/redteam-topology-v3/releases/late
 
 | 文档 | 内容 |
 | --- | --- |
-| [doc/srs.md](doc/srs.md) | 需求规格：业务模块、70 条功能点、非功能要求、目录结构 |
+| [doc/srs.md](doc/srs.md) | 需求规格：业务模块、73 条功能点、非功能要求、目录结构 |
 | [doc/openapi.md](doc/openapi.md) | 接口文档：35 个 REST 接口的参数、返回与错误 |
 | [doc/mcp.md](doc/mcp.md) | MCP 接入：握手、鉴权、20 个工具、字段取值与典型工作流 |
 | [doc/db.md](doc/db.md) | 数据库：表结构、索引、迁移说明 |
+| [doc/redteam-atlas提示词.md](doc/redteam-atlas提示词.md) | 提示词模板：接入 MCP 与红队攻防两段指令，可直接粘给 Agent |
 | [CHANGELOG.md](CHANGELOG.md) | 版本更新日志 |
