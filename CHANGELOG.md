@@ -3,6 +3,22 @@
 官网 <https://github.com/1neptune/redteam-topology-v3>
 发布页 <https://github.com/1neptune/redteam-topology-v3/releases>
 
+## v4.2.1
+
+### 修复
+
+- **`upgrade.sh` 在记录状态后立刻报 `IMAGE_ID: unbound variable` 并中止。**
+  `save_state` 用 `local image_id` 写文件，日志却引用大写的 `IMAGE_ID`，`set -u` 下直接退出。
+  现在 `save_state` 写成全局变量，日志再引用就有值了；镜像 id 为空时显示「尚未构建过镜像」而不是空字符串。
+- `redteam-atlas` 支持 `--version` / `-V`。此前 `current_version` 在容器里执行
+  `redteam-atlas --version`，程序不认这个参数会尝试启动整个服务，等到超时才回落读源码。
+  现在立即打印版本并退出。
+- `current_version` 的回落逻辑加保护：`compose exec` 失败不再被 `||` 链吞掉后误判。
+
+### 说明
+
+- 修复前脚本在 `save_state` 之后、`git fetch` 之前退出，代码与容器都没被改动，数据目录也已备份，
+  可直接重跑。
 ## v4.2.0
 
 ### 修复

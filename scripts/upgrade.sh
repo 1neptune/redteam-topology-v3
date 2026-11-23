@@ -67,12 +67,12 @@ md5_of() { md5sum "$1" 2>/dev/null | cut -d' ' -f1 || sha1sum "$1" | cut -d' ' -
 
 # ── 状态记录（回滚依据）────────────────────────────────────
 save_state() {
-  local image_id prev_ref
-  image_id="$(compose images -q atlas 2>/dev/null | head -n1 || true)"
-  prev_ref="$(git rev-parse --short HEAD 2>/dev/null || echo none)"
+  # 故意写成全局：升级流程紧接着要用 IMAGE_ID 打日志，回滚再从文件读回来
+  IMAGE_ID="$(compose images -q atlas 2>/dev/null | head -n1 || true)"
+  GIT_REF="$(git rev-parse --short HEAD 2>/dev/null || echo none)"
   cat >"$STATE_FILE" <<EOF
-IMAGE_ID=$image_id
-GIT_REF=$prev_ref
+IMAGE_ID=$IMAGE_ID
+GIT_REF=$GIT_REF
 SAVED_AT=$(date -Iseconds)
 EOF
 }
@@ -133,9 +133,16 @@ wait_healthy() {
 
 # ── 版本信息 ───────────────────────────────────────────────
 current_version() {
-  compose exec -T atlas /usr/local/bin/redteam-atlas --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 \
-    || grep -m1 '^version' backend/Cargo.toml | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' \
-    || echo unknown
+  local v
+  # 容器在跑就问它自己；--version 会立刻返回，不会启动服务
+  v="$(compose exec -T atlas /usr/local/bin/redteam-atlas --version 2>/dev/null \
+    | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || true)"
+  if [ -z "$v" ]; then
+    # 容器没起来时读源码里的版本，这是即将构建的版本
+    v="$(grep -m1 '^version' backend/Cargo.toml 2>/dev/null \
+      | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)"
+  fi
+  echo "${v:-unknown}"
 }
 
 remote_version() {
@@ -178,7 +185,13 @@ do_upgrade() {
 
   backup
   save_state
-  log "已记录升级前状态：镜像 ${IMAGE_ID:0:12}，git ${GIT_REF:-unknown}"
+  local shown_image
+  if [ -n "${IMAGE_ID:-}" ]; then
+    shown_image="${IMAGE_ID:0:12}"
+  else
+    shown_image="（无，尚未构建过镜像）"
+  fi
+  log "已记录升级前状态：镜像 $shown_image，git ${GIT_REF:-unknown}"
 
   log "取新代码"
   git fetch --tags --prune origin

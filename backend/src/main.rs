@@ -19,6 +19,12 @@ use crate::state::AppState;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // --version / -V：升级脚本要在容器里问版本，不应为此启动整个服务
+    if std::env::args().skip(1).any(|arg| arg == "--version" || arg == "-V") {
+        println!("redteam-atlas {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+
     // 读取 .env（存在时），便于本地开发与 Docker 外的常驻部署
     if let Err(err) = dotenvy::dotenv() {
         eprintln!("[env] 未加载 .env（{err}），使用默认配置");
