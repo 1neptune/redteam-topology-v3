@@ -110,13 +110,16 @@ pub fn definitions() -> Vec<Value> {
         }),
         json!({
             "name": "update_node",
-            "description": "更新单个节点的字段（名称、IP、状态、备注等）",
+            "description": "更新单个节点的字段（名称、IP、域名、状态、备注、自定义属性）",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "project_id": { "type": "string" },
                     "node_id": { "type": "string" },
-                    "patch": { "type": "object" }
+                    "patch": {
+                        "type": "object",
+                        "description": "只传要改的键。label/kind/ip/port/domain/os/status/notes 是字符串；fields 是自定义属性数组 [{key,value}]，整组替换，传 [] 清空"
+                    }
                 },
                 "required": ["project_id", "node_id", "patch"]
             }
@@ -737,6 +740,21 @@ async fn update_node(
     }
     if let Some(v) = text("notes") {
         node.data.notes = v;
+    }
+    if let Some(v) = text("domain") {
+        node.data.domain = v;
+    }
+
+    // 自定义属性：整组替换。传 [{key, value}]，传空数组表示清空，不传则保持原样。
+    if let Some(list) = patch.get("fields").and_then(|v| v.as_array()) {
+        node.data.fields = list
+            .iter()
+            .filter_map(|item| {
+                let key = item.get("key").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let value = item.get("value").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                (!key.is_empty() || !value.is_empty()).then(|| crate::model::graph::Field { key, value })
+            })
+            .collect();
     }
 
     let result = project_service::save(

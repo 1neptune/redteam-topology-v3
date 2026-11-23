@@ -3,6 +3,25 @@
 官网 <https://github.com/1neptune/redteam-topology-v3>
 发布页 <https://github.com/1neptune/redteam-topology-v3/releases>
 
+## v4.2.0
+
+### 修复
+
+- **画布节点的自定义属性被截断。** 字段名列写死 30px 且用 `white-space: nowrap` + 省略号，
+  任何超过两三个字的字段名都变成「后台…」。现在列宽随内容自适应（上限 40%），字段名
+  允许换行，多长的名字都完整显示。
+- 节点名不再按 20 字硬截，改用两行显示，完整内容仍在悬停提示里。
+- 信息区最高 320px 提到 420px。
+
+### 新增
+
+- `update_node` 的 `patch` 支持 `fields`（自定义属性）与 `domain`。此前这两个键被静默忽略，
+  Agent 写不进自定义属性。`fields` 是整组替换，传 `[]` 清空，不传则保持原样。
+
+### 变更
+
+- 卡片宽度 224px → 248px，给字段名与长值更多空间。
+- 版本号升到 4.2.0。
 ## v4.1.0
 
 ### 新增

@@ -5,7 +5,7 @@ import { useCatalogStore } from '@/stores/catalog'
 import { useEditorStore } from '@/stores/editor'
 import { resolveType, iconOf, statusMeta } from '@/lib/nodeTypes'
 import TypeIcon from '@/components/TypeIcon.vue'
-import { ellipsis, formatClock } from '@/lib/format'
+import { formatClock } from '@/lib/format'
 import { RISK_COLOR_VAR, RISK_LABEL, RISK_SOFT_VAR, topRisk } from '@/lib/report'
 import type { GraphNode } from '@/types'
 
@@ -89,7 +89,7 @@ const risk = computed(() => {
           <svg aria-hidden="true" viewBox="0 0 24 24"><path :d="glyph" /></svg>
         </TypeIcon>
       </span>
-      <span class="asset__name" :title="data.label">{{ ellipsis(data.label || '未命名', 20) }}</span>
+      <span class="asset__name" :title="data.label">{{ data.label || '未命名' }}</span>
       <span
         v-if="risk"
         class="asset__risk"
@@ -126,7 +126,7 @@ const risk = computed(() => {
 
 <style scoped>
 .asset {
-  width: 224px;
+  width: 248px;
   border: 1px solid var(--color-rule);
   border-radius: var(--radius-card);
   background: var(--color-paper-2);
@@ -184,9 +184,13 @@ const risk = computed(() => {
   font-size: 12.5px;
   font-weight: 500;
   color: var(--color-ink);
+  /* 最多两行，超出才省略；完整内容在 title 里 */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .asset__line {
@@ -221,14 +225,15 @@ const risk = computed(() => {
 
 .asset__meta {
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr);
+  /* 字段名列随内容变宽、最多占 40%，字段名不再被压成省略号 */
+  grid-template-columns: fit-content(40%) minmax(0, 1fr);
   gap: var(--space-3xs) var(--space-2xs);
   align-items: start;
   padding: var(--space-2xs) var(--space-xs);
   background: var(--color-paper-3);
   border-top: 1px solid color-mix(in oklab, var(--color-rule) 60%, transparent);
   /* 信息行全部列出；条目过多时在同一区域内滚动，不撑破画布 */
-  max-height: 320px;
+  max-height: 420px;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -236,9 +241,10 @@ const risk = computed(() => {
 .asset__meta dt {
   font-size: 10px;
   color: var(--color-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* 长字段名换行显示完整，不截断 */
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .asset__meta dd {

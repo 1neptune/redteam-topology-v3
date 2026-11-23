@@ -112,7 +112,7 @@ curl -s http://<host>:8080/mcp \
   "result": {
     "protocolVersion": "2025-06-18",
     "capabilities": { "tools": { "listChanged": false } },
-    "serverInfo": { "name": "redteam-atlas", "version": "4.1.0" }
+    "serverInfo": { "name": "redteam-atlas", "version": "4.2.0" }
   }
 }
 ```
@@ -380,12 +380,32 @@ payload = json.loads(response["result"]["content"][0]["text"])
   "arguments": {
     "project_id": "p_9f2c...",
     "node_id": "n_7f3a...",
-    "patch": { "status": "control", "notes": "已拿到 SYSTEM 权限" }
+    "patch": {
+      "status": "control",
+      "domain": "pmp.example.com",
+      "notes": "已拿到 SYSTEM 权限",
+      "fields": [
+        { "key": "后台管理员账号", "value": "admin_pmp" },
+        { "key": "SSL证书到期日", "value": "2027-03-15" }
+      ]
+    }
   }
 }
 ```
 
-`node_id` 也接受节点 `label`。可改字段：`label`、`kind`、`ip`、`port`、`os`、`status`、`notes`。
+`node_id` 也接受节点 `label`。可改字段：
+
+| 键 | 类型 | 说明 |
+| --- | --- | --- |
+| `label` | string | 节点名，画布上最多两行，完整内容在悬停提示里 |
+| `kind` | string | 组件类型 slug |
+| `ip` / `port` / `domain` | string | 地址；`ip` 与 `domain` 可只填一个，`port` 会拼在两者后面 |
+| `os` | string | 操作系统 |
+| `status` | string | `recon` / `attack` / `control` / `blocked` |
+| `notes` | string | 备注 |
+| `fields` | array | 自定义属性，`[{key, value}]`。**整组替换**，传 `[]` 清空，不传则保持原样 |
+
+自定义属性就是画布节点卡片下半部分那几行，字段名与值都会完整换行显示，不会被截断。
 
 返回：
 
@@ -893,7 +913,7 @@ tools/call get_project { project_id }
 ```json
 {
   "protocolVersion": "2025-06-18",
-  "serverInfo": { "name": "redteam-atlas", "version": "4.1.0" }
+  "serverInfo": { "name": "redteam-atlas", "version": "4.2.0" }
 }
 ```
 
