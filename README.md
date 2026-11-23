@@ -16,7 +16,7 @@
 
 **审计与日志**：每次保存产生字段级审计，记录「谁在什么时候改了哪个对象的哪个字段」；接口访问、运行错误与项目变更各有独立日志文件。
 
-**AI Agent 接入**：内置 MCP 服务端，19 个工具，Agent 可直接读写拓扑。
+**AI Agent 接入**：内置 MCP 服务端，20 个工具，Agent 可直接读写拓扑、上传截图写进漏洞详情。
 
 ### 项目列表
 
@@ -355,7 +355,7 @@ curl -sS https://api.github.com/repos/1neptune/redteam-topology-v3/releases/late
 | 文档 | 内容 |
 | --- | --- |
 | [doc/srs.md](doc/srs.md) | 需求规格：业务模块、70 条功能点、非功能要求、目录结构 |
-| [doc/openapi.md](doc/openapi.md) | 接口文档：36 个 REST 接口的参数、返回与错误 |
-| [doc/mcp.md](doc/mcp.md) | MCP 接入：握手、鉴权、19 个工具、字段取值与典型工作流 |
+| [doc/openapi.md](doc/openapi.md) | 接口文档：35 个 REST 接口的参数、返回与错误 |
+| [doc/mcp.md](doc/mcp.md) | MCP 接入：握手、鉴权、20 个工具、字段取值与典型工作流 |
 | [doc/db.md](doc/db.md) | 数据库：表结构、索引、迁移说明 |
 | [CHANGELOG.md](CHANGELOG.md) | 版本更新日志 |
