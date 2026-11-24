@@ -91,9 +91,11 @@ export async function uploadImage(file: File): Promise<string> {
 export async function imageDataUrl(idOrUrl: string): Promise<string> {
   const cached = cache.get(idOrUrl)
   if (cached) return cached
-  // 正文里存的是签名地址，直接取；只给了 id 时走需要登录的接口
-  const path = idOrUrl.startsWith('/') || idOrUrl.startsWith('http') ? idOrUrl : `/uploads/${idOrUrl}`
-  const response = await http.get(path, { responseType: 'blob' })
+  // 正文里存的是 /api/pub/uploads/... 这样的完整路径，而 http 的 baseURL 已经是 /api，
+  // 直接传会被拼成 /api/api/... 打不开；这类地址用 baseURL='' 原样请求。
+  const isFullPath = idOrUrl.startsWith('/') || idOrUrl.startsWith('http')
+  const path = isFullPath ? idOrUrl : `/uploads/${idOrUrl}`
+  const response = await http.get(path, isFullPath ? { responseType: 'blob', baseURL: '' } : { responseType: 'blob' })
   const blob = response.data as Blob
   const dataUrl = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader()
