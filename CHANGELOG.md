@@ -3,6 +3,46 @@
 官网 <https://github.com/1neptune/redteam-topology-v3>
 发布页 <https://github.com/1neptune/redteam-topology-v3/releases>
 
+## v4.5.3
+
+### 修复
+
+- **列表项里的截图导不进 Word。** 渗透详情最常见的写法是「一步一句 + `<br><img>`」，
+  整段包在 `<ol><li>` 里。`htmlToBlocks` 的 `LI` 分支直接取 `textContent` 就返回，
+  图片永远收不到；`<p>` 里嵌图反而正常，所以之前测不出来。
+  - `LI` 分支改为先把文字抽出来（剥掉 img），再把其中的图逐个收进 block，
+    保持文字在前、图片在后的顺序。
+- **导出的 PNG 上，连线上甩出大块黑色三角。** 箭头 marker 用的是
+  `markerUnits="strokeWidth"`，尺寸要乘以描边宽度；`html-to-image` 序列化时
+  拿不到正确的 stroke-width，箭头被放大十几倍，变成从节点冲出去的黑三角。
+  - 导出期间把 marker 的 `markerUnits` 改成 `userSpaceOnUse`，尺寸固定为
+    `markerWidth`，导出后恢复。
+
+### 实测
+
+服务器上「马可波罗设计师俱乐部管理后台」那条漏洞的 detail 是：
+
+```html
+<ol><li>…<br><img src="/api/pub/uploads/img_xxx?sig=…" alt="…"></li>…</ol>
+```
+
+用同款结构导出后：
+
+```
+修复前  media 0 张  drawing 0 处  11.5 KB
+修复后  media 1 张  drawing 2 处  （无「无法嵌入」提示）
+```
+
+同一份拓扑导出 PNG，统计「比背景更暗」的行数（采样步长 2）：
+
+```
+修复前  692 行   连线上有连续黑三角与黑带
+修复后    5 行   与背景噪声持平
+```
+
+### 变更
+
+- 版本号升到 4.5.3。
 ## v4.5.2
 
 ### 变更

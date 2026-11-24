@@ -57,6 +57,11 @@ async function capture(el: HTMLElement | null, pixelRatio: number): Promise<Expo
   // 颜色已经能把两类边分开），导出时统一拉成实线。
   const edges = Array.from(el.querySelectorAll<SVGPathElement>('.vue-flow__edge-path'))
   const dashBefore = edges.map((node) => node.style.strokeDasharray)
+  // 箭头 marker 用的是 markerUnits="strokeWidth"，尺寸要乘以描边宽度。
+  // html-to-image 序列化时拿不到正确的 stroke-width，箭头会被放大十几倍，
+  // 变成从节点甩出去的大黑三角。改用用户坐标，尺寸就固定成 markerWidth。
+  const markers = Array.from(el.querySelectorAll<SVGMarkerElement>('marker'))
+  const unitsBefore = markers.map((node) => node.getAttribute('markerUnits'))
 
   el.classList.add('is-exporting')
   if (watermark) {
@@ -71,6 +76,9 @@ async function capture(el: HTMLElement | null, pixelRatio: number): Promise<Expo
     }
     for (const node of edges) {
       node.style.strokeDasharray = 'none'
+    }
+    for (const node of markers) {
+      node.setAttribute('markerUnits', 'userSpaceOnUse')
     }
 
 
@@ -104,6 +112,11 @@ async function capture(el: HTMLElement | null, pixelRatio: number): Promise<Expo
     el.classList.remove('is-exporting')
     edges.forEach((node, index) => {
       node.style.strokeDasharray = dashBefore[index] ?? ''
+    })
+    markers.forEach((node, index) => {
+      const previous = unitsBefore[index]
+      if (previous == null) node.removeAttribute('markerUnits')
+      else node.setAttribute('markerUnits', previous)
     })
     // 原样插回原来的位置，热区不能丢，否则连线点不中
     for (const item of detached) {

@@ -112,7 +112,17 @@ export function htmlToBlocks(html: string): RichBlock[] {
       return
     }
     if (el.tagName === 'LI') {
-      blocks.push({ type: 'li', text: (el.textContent ?? '').trim() })
+      // 列表项里的截图要单独收：textContent 只取文字，直接把 img 吞掉，
+      // 而渗透详情常见写法就是「一步一句 + <br><img>」。
+      const images = Array.from(el.querySelectorAll('img'))
+        .map((img) => img.getAttribute('src') ?? '')
+        .filter((src) => src !== '')
+      // 正文去掉图片后剩下的文字，逐行拆开
+      const clone = el.cloneNode(true) as Element
+      for (const img of Array.from(clone.querySelectorAll('img'))) img.remove()
+      const text = (clone.textContent ?? '').trim()
+      if (text) blocks.push({ type: 'li', text })
+      for (const src of images) blocks.push({ type: 'img', src })
       return
     }
     // 其余容器：有块级子元素就继续下钻，否则整体作为一段
