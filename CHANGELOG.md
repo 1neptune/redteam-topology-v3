@@ -3,6 +3,32 @@
 官网 <https://github.com/1neptune/redteam-topology-v3>
 发布页 <https://github.com/1neptune/redteam-topology-v3/releases>
 
+## v4.5.1
+
+### 修复
+
+- **画布导出的 PNG 里，连线上压着一排黑块。** 边是虚线（`stroke-dasharray: 5px, 4px`），
+  而 `html-to-image` 序列化 SVG 时会在每段虚线的边界外扩出一圈比背景更黑的像素，
+  连起来像一条黑带。静态图里虚线本不表达含义（「计划中」的语义由更淡的描边色承担），
+  导出时统一拉成实线。
+  - 用 CSS `.is-exporting .vue-flow__edge-path { stroke-dasharray: none !important }`，
+    因为 Vue 的 style 绑定会在重渲染时把虚线写回 inline，改 inline 拦不住。
+- 边上的点击热区（20px 宽、`stroke-opacity: 0`）不再靠 `stroke-width: 0` 屏蔽，
+  改为导出前从 DOM 摘除、导出后原样插回。`html-to-image` 会丢掉内联的
+  `stroke-opacity`，默认黑色描边就露出来。
+
+### 实测
+
+同一份拓扑（3 节点 2 链路）导出后，沿连线横向取 140 个像素统计「比背景更暗」的点：
+
+```
+修复前  10/140   连线上有连续黑块
+修复后   4/140   与背景噪声持平
+```
+
+### 变更
+
+- 版本号升到 4.5.1。
 ## v4.5.0
 
 ### 新增

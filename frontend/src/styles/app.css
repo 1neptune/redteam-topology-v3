@@ -801,9 +801,15 @@
 .vue-flow__node { font-family: var(--font-body); }
 .vue-flow__edge-path { stroke-linecap: round; }
 
-/* 边的点击热区：浏览器里是透明，导出时必须显式抹掉描边（否则会被渲染成 20px 黑色粗线） */
+/* 边的点击热区：浏览器里是透明，导出时整条不能进快照。
+   它是 20px 宽的描边，Vue Flow 用 stroke-opacity:0 隐藏，
+   而 html-to-image 序列化 SVG 时会丢这个属性，默认黑色就露出来，
+   压在虚线上像一排黑块。display:none 在序列化时必然被跳过，最可靠。 */
 .vue-flow__edge-interaction { stroke: transparent; fill: none; }
-.is-exporting .vue-flow__edge-interaction { stroke: none !important; }
+.is-exporting .vue-flow__edge-interaction {
+  stroke: none !important;
+  display: none !important;
+}
 
 /* 导出时去掉阴影与半透明叠层：
    html-to-image 逐节点栅格化，深色背景上的 box-shadow 会叠成一道暗边（看起来像重影）。 */
@@ -812,6 +818,14 @@
   box-shadow: none !important;
   filter: none !important;
   text-shadow: none !important;
+}
+
+/* 虚线边导出时必须拉成实线：html-to-image 渲染 stroke-dasharray 时，
+   每段短线周围会叠出比背景更黑的块，连起来像一条黑带压在连线上。
+   静态图里虚线不表达含义（「计划中」的语义由更淡的颜色承担），
+   用 !important 是因为 Vue 的 style 绑定会在重渲染时把虚线写回 inline。 */
+.is-exporting .vue-flow__edge-path {
+  stroke-dasharray: none !important;
 }
 
 /* 边的箭头标记按实心绘制，避免离屏渲染时描边叠出第二道轮廓 */

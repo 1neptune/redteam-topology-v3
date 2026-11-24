@@ -41,8 +41,22 @@ async function capture(el: HTMLElement | null, pixelRatio: number): Promise<Expo
   if (!el) throw new Error('画布还未准备好')
 
   const watermark = el.querySelector<HTMLElement>('[data-export-watermark]')
-  const interactions = Array.from(el.querySelectorAll<SVGPathElement>('.vue-flow__edge-interaction'))
-  const previousWidths = interactions.map((node) => node.getAttribute('stroke-width'))
+  // 边的点击热区是 20px 宽的透明描边，浏览器里看不见，
+  // 但 html-to-image 把它序列化时会画成一条 20px 黑带压在连线上。
+  // 改 stroke-width 与 filter 都拦不住（对 SVG 子元素不可靠），
+  // 只有在快照前把它从 DOM 摘掉。
+  const interactions = Array.from(el.querySelectorAll<SVGElement>('.vue-flow__edge-interaction'))
+  const detached = interactions.map((node) => ({
+    node,
+    parent: node.parentElement,
+    next: node.nextElementSibling,
+  }))
+  // 虚线边在快照里会出问题：html-to-image 渲染 stroke-dasharray 时，
+  // 每段短线周围会叠出一层比背景更黑的块，连起来像一条黑带。
+  // 静态图里虚线也不表达任何含义（那只是「计划中」的视觉提示，
+  // 颜色已经能把两类边分开），导出时统一拉成实线。
+  const edges = Array.from(el.querySelectorAll<SVGPathElement>('.vue-flow__edge-path'))
+  const dashBefore = edges.map((node) => node.style.strokeDasharray)
 
   el.classList.add('is-exporting')
   if (watermark) {
@@ -52,10 +66,14 @@ async function capture(el: HTMLElement | null, pixelRatio: number): Promise<Expo
 
   try {
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
-    for (const node of interactions) {
-      node.setAttribute('stroke-width', '0')
-      node.style.strokeWidth = '0'
+    for (const item of detached) {
+      item.node.remove()
     }
+    for (const node of edges) {
+      node.style.strokeDasharray = 'none'
+    }
+
+
 
     const rect = el.getBoundingClientRect()
     const width = Math.round(rect.width * pixelRatio)
@@ -84,12 +102,18 @@ async function capture(el: HTMLElement | null, pixelRatio: number): Promise<Expo
     return { dataUrl, width, height, bytes }
   } finally {
     el.classList.remove('is-exporting')
-    interactions.forEach((node, index) => {
-      const previous = previousWidths[index]
-      if (previous == null) node.removeAttribute('stroke-width')
-      else node.setAttribute('stroke-width', previous)
-      node.style.strokeWidth = ''
+    edges.forEach((node, index) => {
+      node.style.strokeDasharray = dashBefore[index] ?? ''
     })
+    // 原样插回原来的位置，热区不能丢，否则连线点不中
+    for (const item of detached) {
+      if (!item.parent) continue
+      if (item.next && item.next.parentElement === item.parent) {
+        item.parent.insertBefore(item.node, item.next)
+      } else {
+        item.parent.appendChild(item.node)
+      }
+    }
     if (watermark) {
       watermark.style.opacity = '0'
       watermark.style.transition = ''
