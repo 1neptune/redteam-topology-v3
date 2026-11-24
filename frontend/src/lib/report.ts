@@ -8,7 +8,7 @@
 
 import type { RiskLevel, Vulnerability } from '@/types'
 import { htmlToBlocks } from '@/lib/richText'
-import { imageCache, imageDataUrl } from '@/api/vulnImage'
+import { imageCache, imageSizeCache, imageDataUrl } from '@/api/vulnImage'
 
 export type RiskKey = RiskLevel | 'none'
 
@@ -125,27 +125,101 @@ export function vulnTitle(item: Vulnerability, index: number): string {
   return name || `漏洞 ${index + 1}`
 }
 
-/** 把 data URL 转成 docx 需要的字节与格式；尺寸按 4:3 兜底（docx 不需要真实比例也能排版） */
-function dataUrlBytes(url: string): { data: Uint8Array; type: 'png' | 'jpg'; width: number; height: number } | null {
+/** 按文件头判断真实格式：声明与实际不符时 Word 会显示破图 */
+function sniffImageType(bytes: Uint8Array): 'png' | 'jpg' | 'gif' | 'bmp' | null {
+  if (bytes.length < 12) return null
+  // JPEG: FF D8 FF
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'jpg'
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'png'
+  // GIF: 47 49 46 38
+  if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38) return 'gif'
+  // BMP: 42 4D
+  if (bytes[0] === 0x42 && bytes[1] === 0x4d) return 'bmp'
+  return null
+}
+
+/** 从 PNG 头部读像素尺寸：IHDR 固定在第 16 字节起，大端 4 字节宽高 */
+function pngSize(bytes: Uint8Array): { width: number; height: number } | null {
+  if (bytes.length < 24) return null
+  if (!(bytes[12] === 0x49 && bytes[13] === 0x48 && bytes[14] === 0x44 && bytes[15] === 0x52)) return null
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  const width = view.getUint32(16, false)
+  const height = view.getUint32(20, false)
+  return width > 0 && height > 0 ? { width, height } : null
+}
+
+/** 从 JPEG 的 SOF 段读尺寸：逐段跳过，遇到 SOF0/1/2 就取宽高 */
+function jpegSize(bytes: Uint8Array): { width: number; height: number } | null {
+  let i = 2
+  while (i + 8 < bytes.length) {
+    if (bytes[i] !== 0xff) {
+      i += 1
+      continue
+    }
+    const marker = bytes[i + 1]
+    // SOF0..SOF3、SOF5..SOF7、SOF9..SOF11、SOF13..SOF15 都带尺寸
+    const isSof = marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc
+    const length = (bytes[i + 2] << 8) | bytes[i + 3]
+    if (isSof) {
+      const height = (bytes[i + 5] << 8) | bytes[i + 6]
+      const width = (bytes[i + 7] << 8) | bytes[i + 8]
+      return width > 0 && height > 0 ? { width, height } : null
+    }
+    // 无长度的标记
+    if (marker === 0xd8 || marker === 0xd9 || (marker >= 0xd0 && marker <= 0xd7) || marker === 0x01) {
+      i += 2
+      continue
+    }
+    if (length < 2) return null
+    i += 2 + length
+  }
+  return null
+}
+
+/** 读图片真实像素尺寸，读不出返回 null */
+function imageSize(bytes: Uint8Array, type: string): { width: number; height: number } | null {
+  if (type === 'png') return pngSize(bytes)
+  if (type === 'jpg') return jpegSize(bytes)
+  return null
+}
+
+/**
+ * 把 data URL 转成 docx 需要的字节与格式。
+ *
+ * 格式以文件头为准而不是 data URL 里的 mime 声明——上传链路可能把 webp/gif
+ * 标成 jpeg，声明对不上时 Word 会显示成破图。
+ * 读不出真实格式的（webp 等 docx 不认的）返回 null，让调用方退化成文字说明。
+ */
+function dataUrlBytes(url: string): { data: Uint8Array; type: 'png' | 'jpg' | 'gif' | 'bmp'; width: number; height: number } | null {
   try {
+    // 尺寸缓存按原始地址索引，要在换成 data URL 之前记下来
+    const originalUrl = url
     // 预取过就换成 data URL，否则 docx 拿不到二进制
     if (!url.startsWith('data:')) {
       const ready = imageCache.get(url)
       if (ready) url = ready
     }
-    const head = url.slice(0, url.indexOf(','))
-    const base64 = url.slice(url.indexOf(',') + 1)
+    const comma = url.indexOf(',')
+    if (comma < 0) return null
+    const head = url.slice(0, comma)
+    const base64 = url.slice(comma + 1)
     if (!head.includes('base64')) return null
-    const mime = head.slice(head.indexOf(':') + 1, head.indexOf(';'))
     const binary = atob(base64)
     const data = new Uint8Array(binary.length)
     for (let i = 0; i < binary.length; i += 1) data[i] = binary.charCodeAt(i)
-    return {
-      data,
-      type: mime.includes('png') ? 'png' : 'jpg',
-      width: 800,
-      height: 600,
+
+    const type = sniffImageType(data)
+    if (!type) return null
+
+    // 尺寸来源，从最可靠到最不可靠：上传时记下的 → 文件头解析 → 4:3 兜底
+    const known = imageSizeCache.get(originalUrl)
+    const probed = known ?? imageSize(data, type)
+    if (!probed) {
+      console.warn('[report] 读不出图片尺寸，按 4:3 排版', { type, bytes: data.length })
     }
+    const size = probed ?? { width: 800, height: 600 }
+    return { data, type, width: size.width, height: size.height }
   } catch {
     return null
   }
@@ -236,7 +310,7 @@ export async function exportVulnsWord(meta: ReportMeta, vulns: Vulnerability[]):
     })
 
   /** 富文本块：段落、列表项与图片，图片按版心 460pt 等比缩放 */
-  const richBlocks = (html: string, index: number): import('docx').Paragraph[] => {
+  const richBlocks = async (html: string, index: number): Promise<import('docx').Paragraph[]> => {
     const blocks = htmlToBlocks(html)
     if (!blocks.length) {
       return [
@@ -255,7 +329,7 @@ export async function exportVulnsWord(meta: ReportMeta, vulns: Vulnerability[]):
     ]
     for (const item of blocks) {
       if (item.type === 'img' && item.src) {
-        out.push(shotParagraph(item.src, index))
+        out.push(await shotParagraph(item.src, index))
         continue
       }
       out.push(
@@ -269,12 +343,39 @@ export async function exportVulnsWord(meta: ReportMeta, vulns: Vulnerability[]):
     return out
   }
 
+  /** 内联图片的最大显示宽度与高度（docx 单位是 px，约等于 1/96 英寸） */
+  const SHOT_MAX_W = 460
+  const SHOT_MAX_H = 520
+
+  /**
+   * 按真实比例缩放到框内。
+   *
+   * 尺寸来自文件头（见 imageSize），不用 createImageBitmap——那个在部分环境里
+   * 会失败，一旦失败就只能退回 4:3，横图会被压扁。
+   */
+  const fitSize = (width: number, height: number): { width: number; height: number } => {
+    if (width <= 0 || height <= 0) {
+      return { width: SHOT_MAX_W, height: Math.round((SHOT_MAX_W * 3) / 4) }
+    }
+    const scale = Math.min(SHOT_MAX_W / width, SHOT_MAX_H / height, 1)
+    return {
+      width: Math.max(1, Math.round(width * scale)),
+      height: Math.max(1, Math.round(height * scale)),
+    }
+  }
+
   /** 一张内联图片的段落；读不出来就退化成一行说明 */
-  const shotParagraph = (src: string, index: number): import('docx').Paragraph => {
+  const shotParagraph = async (src: string, index: number): Promise<import('docx').Paragraph> => {
     const parsed = dataUrlBytes(src)
     if (!parsed) {
       return new Paragraph({
-        children: [new TextRun({ text: `（漏洞 ${index + 1} 的图片无法解析）`, size: 17, color: 'A1A1AA' })],
+        children: [
+          new TextRun({
+            text: `（漏洞 ${index + 1} 的图片无法嵌入：格式不受 Word 支持，或该图已失效）`,
+            size: 17,
+            color: 'A1A1AA',
+          }),
+        ],
       })
     }
     return new Paragraph({
@@ -283,7 +384,7 @@ export async function exportVulnsWord(meta: ReportMeta, vulns: Vulnerability[]):
         new ImageRun({
           type: parsed.type,
           data: parsed.data,
-          transformation: { width: 460, height: Math.round(460 * (parsed.height / parsed.width)) },
+          transformation: fitSize(parsed.width, parsed.height),
         }),
       ],
     })
@@ -308,10 +409,11 @@ export async function exportVulnsWord(meta: ReportMeta, vulns: Vulnerability[]):
     ]
   }
 
-  /** 每条漏洞一节 */
-  const sections = vulns.flatMap((item, index) => {
+  /** 每条漏洞一节；图片段落是异步读取的，所以整体按顺序拼 */
+  const sections: import('docx').Paragraph[] = []
+  for (const [index, item] of vulns.entries()) {
     const risk = riskKey(item.risk)
-    const head = [
+    sections.push(
       new Paragraph({
         heading: HeadingLevel.HEADING_1,
         spacing: { before: 300, after: 60 },
@@ -320,14 +422,11 @@ export async function exportVulnsWord(meta: ReportMeta, vulns: Vulnerability[]):
           new TextRun({ text: `    ${RISK_LABEL[risk]}`, size: 20, bold: true, color: RISK_HEX[risk] }),
         ],
       }),
-    ]
-    return [
-      ...head,
-      ...block('漏洞说明', item.description),
-      ...richBlocks(item.detail, index),
-      ...block('处置建议', item.remediation),
-    ]
-  })
+    )
+    sections.push(...block('漏洞说明', item.description))
+    sections.push(...(await richBlocks(item.detail, index)))
+    sections.push(...block('处置建议', item.remediation))
+  }
 
   const summaryRows = vulns.map(
     (item, index) =>

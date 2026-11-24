@@ -13,11 +13,19 @@ export const IMAGE_MAX_COUNT = 8
 export const imageCache = new Map<string, string>()
 const cache = imageCache
 
+/**
+ * upload id 或签名地址 → 图片真实像素尺寸。
+ *
+ * 上传时 compress 已经解码过图片，顺手记下来；导出 Word 时直接取，
+ * 不必再从文件头解析——那一步在压缩流上容易读错。
+ */
+export const imageSizeCache = new Map<string, { width: number; height: number }>()
+
 /** 编辑框内联图片的最长边，超过就等比缩小 */
 const INLINE_MAX_EDGE = 1600
 
-/** 压到 JPEG 画布上，返回新的 data URL（同尺寸小图直接返回原样） */
-async function compress(file: File): Promise<string> {
+/** 压到 JPEG 画布上，返回新的 data URL 与原始像素尺寸（同尺寸小图直接返回原样） */
+async function compress(file: File): Promise<{ dataUrl: string; width: number; height: number }> {
   const url = URL.createObjectURL(file)
   try {
     const image = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -26,11 +34,12 @@ async function compress(file: File): Promise<string> {
       probe.onerror = () => reject(new Error('图片无法解码'))
       probe.src = url
     })
+    const size = { width: image.naturalWidth, height: image.naturalHeight }
     const scale = Math.min(1, INLINE_MAX_EDGE / Math.max(image.naturalWidth, image.naturalHeight))
     // 已经足够小就不要再压一遍，避免无谓损失
     if (scale === 1 && file.size <= 320 * 1024 && file.type !== 'image/png') {
       const raw = await toBase64(file)
-      return `data:${file.type};base64,${raw}`
+      return { dataUrl: `data:${file.type};base64,${raw}`, ...size }
     }
     const canvas = document.createElement('canvas')
     canvas.width = Math.max(1, Math.round(image.naturalWidth * scale))
@@ -38,7 +47,8 @@ async function compress(file: File): Promise<string> {
     const ctx = canvas.getContext('2d')
     if (!ctx) throw new Error('浏览器不支持画布')
     ctx.drawImage(image, 0, 0, canvas.width, canvas.height)
-    return canvas.toDataURL('image/jpeg', 0.82)
+    // 返回画布尺寸而不是原始尺寸：导出时的显示比例要跟压缩后的图一致
+    return { dataUrl: canvas.toDataURL('image/jpeg', 0.82), width: canvas.width, height: canvas.height }
   } finally {
     URL.revokeObjectURL(url)
   }
@@ -73,12 +83,14 @@ export async function uploadImage(file: File): Promise<string> {
   if (file.size > IMAGE_MAX_BYTES) {
     throw new Error('图片不能超过 8MB')
   }
-  const dataUrl = await compress(file)
+  const { dataUrl, width, height } = await compress(file)
   const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1)
   const result = await uploadIcon(file.name, 'image/jpeg', base64)
-  // 缓存一份 data URL，导出 Word 时不必再取一次
+  // 缓存 data URL 与尺寸，导出 Word 时不必再取、也不必再解析
   cache.set(result.id, dataUrl)
   cache.set(result.url, dataUrl)
+  imageSizeCache.set(result.id, { width, height })
+  imageSizeCache.set(result.url, { width, height })
   return result.url
 }
 

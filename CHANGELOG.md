@@ -3,6 +3,34 @@
 官网 <https://github.com/1neptune/redteam-topology-v3>
 发布页 <https://github.com/1neptune/redteam-topology-v3/releases>
 
+## v4.3.1
+
+### 修复
+
+- **Word 里的照片变形、或有图框没内容。** 两处：
+  - 所有图片都按写死的 4:3 排版，`640x400` 的横截图被压成 `460x345`。现在从 PNG 的 IHDR、
+    JPEG 的 SOF 段读出真实像素，按比例缩放到 460 宽、最高 520。
+  - 图片格式按 data URL 的 mime 声明判断，而上传链路会把 webp/gif 标成 jpeg，声明与字节不符时
+    Word 显示破图。改成读文件头（`FF D8 FF` / `89 50 4E 47` / `47 49 46 38` / `42 4D`）定格式。
+  - 上传时把真实像素记进 `imageSizeCache`，导出直接取，不再依赖解析。
+  - 读不出格式的图退化成一行说明文字，不再静默丢图。
+
+### 实测
+
+导出一份含两张截图的报告：
+
+```
+显示尺寸  460x383  比例 1.2
+media      1600x1333  比例 1.2  112408 字节
+兜底文字  无
+```
+
+比例一致，图片可正常解码。
+
+### 说明
+
+- 排查中一度以为代码没生效，实为 headless Chrome 缓存了旧 bundle。重新导出前需要
+  `Page.reload({ignoreCache: true})`，否则看到的是上一版行为。
 ## v4.3.0
 
 ### 修复
