@@ -162,8 +162,13 @@ function withPort(host?: string, port?: string): string {
 }
 
 /** 生成 Word 报告（.docx） */
-/** 把正文里引用的图片预取成 data URL，Word 里才能同步嵌进去 */
-async function primeImages(vulns: Vulnerability[]): Promise<void> {
+/**
+ * 把正文里引用的图片预取成 data URL，Word 里才能同步嵌进去。
+ *
+ * 返回取失败的地址：导出时这些图会缺席，界面据此提示，
+ * 而不是让人打开 Word 才发现少图。
+ */
+async function primeImages(vulns: Vulnerability[]): Promise<string[]> {
   const urls = new Set<string>()
   for (const item of vulns) {
     for (const match of (item.detail ?? '').matchAll(/<img[^>]+src="([^"]+)"/g)) {
@@ -171,11 +176,23 @@ async function primeImages(vulns: Vulnerability[]): Promise<void> {
       if (src && !src.startsWith('data:')) urls.add(src)
     }
   }
-  await Promise.all([...urls].map((url) => imageDataUrl(url).catch(() => '')))
+  const failed: string[] = []
+  await Promise.all(
+    [...urls].map(async (url) => {
+      try {
+        await imageDataUrl(url)
+      } catch (err) {
+        console.warn('[report] 图片取不回来，Word 里会缺这张', url, err)
+        failed.push(url)
+      }
+    }),
+  )
+  return failed
 }
 
 export async function exportVulnsWord(meta: ReportMeta, vulns: Vulnerability[]): Promise<void> {
   await primeImages(vulns)
+  // 取不到的图在 shotParagraph 里会退化成说明文字，不会整个导出失败
   const {
     AlignmentType,
     BorderStyle,

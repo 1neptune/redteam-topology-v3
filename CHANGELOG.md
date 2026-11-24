@@ -3,6 +3,27 @@
 官网 <https://github.com/1neptune/redteam-topology-v3>
 发布页 <https://github.com/1neptune/redteam-topology-v3/releases>
 
+## v4.3.0
+
+### 修复
+
+- **Word 报告里图片不显示。** 正文存的是 `/api/pub/uploads/xxx?sig=xxx` 这样的完整路径，
+  而请求库的 `baseURL` 已经是 `/api`，传进去被拼成 `/api/api/pub/uploads/...`，一律 404。
+  取图失败又被 `.catch(() => '')` 静默吞掉，于是导出的 Word 里只有文字没有图。
+  - 完整路径改用 `baseURL: ''` 原样请求
+  - 取图失败写进控制台，不再无声无息
+- 实测导出：`word/media/image1.jpg` 112 KB 正常嵌入，`<w:drawing>` 5 处。
+
+### 新增
+
+- 画布组件库支持模糊搜索。`dbs` 命中「数据库」，`dmn` 命中「域控 / AD」，
+  `fwl` 命中「防火墙 / WAF」，`web应` 命中「Web 应用」。命中项按相关度排序，
+  最接近的排在最前；分组名命中时整组靠前。
+- `lib/fuzzy.ts`：子序列打分，连续命中比跳跃命中分数低。12 个单元测试覆盖。
+
+### 变更
+
+- 版本号升到 4.3.0。
 ## v4.2.1
 
 ### 修复

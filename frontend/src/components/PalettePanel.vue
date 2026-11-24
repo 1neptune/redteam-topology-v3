@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useCatalogStore } from '@/stores/catalog'
 import { useEditorStore } from '@/stores/editor'
 import { groupTypes, iconOf } from '@/lib/nodeTypes'
+import { bestScore } from '@/lib/fuzzy'
 import TypeIcon from '@/components/TypeIcon.vue'
 
 const emit = defineEmits<{ add: [slug: string]; manage: [] }>()
@@ -13,22 +14,35 @@ const editor = useEditorStore()
 const canCreate = computed(() => editor.canEdit)
 const keyword = ref('')
 
-/** 过滤后的分组：组件名、slug、分组名都参与匹配 */
+/**
+ * 过滤后的分组：组件名、slug、分组名都参与匹配。
+ *
+ * 走模糊匹配而不是简单子串——输入 `wapp` 能命中「Web 应用」，
+ * `rk` 能命中「入口」。命中的组件按相关度排序，最像的排在最前。
+ */
 const groups = computed(() => {
   const all = groupTypes(catalog.types)
-  const kw = keyword.value.trim().toLowerCase()
+  const kw = keyword.value.trim()
   if (!kw) return all
+
   return all
-    .map((group) => ({
-      group: group.group,
-      items: group.items.filter(
-        (item) =>
-          item.label.toLowerCase().includes(kw) ||
-          item.slug.toLowerCase().includes(kw) ||
-          group.group.toLowerCase().includes(kw),
-      ),
-    }))
+    .map((group) => {
+      const scored = group.items
+        .map((item) => ({
+          item,
+          score: bestScore(kw, [item.label, item.slug, group.group]),
+        }))
+        .filter((row): row is { item: (typeof group.items)[number]; score: number } => row.score !== null)
+        .sort((a, b) => a.score - b.score)
+      return {
+        group: group.group,
+        items: scored.map((row) => row.item),
+        // 分组名自己命中时整组靠前，否则按组内最佳匹配排
+        score: bestScore(kw, [group.group]) ?? scored[0]?.score ?? 999,
+      }
+    })
     .filter((group) => group.items.length > 0)
+    .sort((a, b) => a.score - b.score)
 })
 
 const total = computed(() => groups.value.reduce((sum, group) => sum + group.items.length, 0))
