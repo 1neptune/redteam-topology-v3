@@ -48,11 +48,13 @@ async function capture(el: HTMLElement | null, pixelRatio: number): Promise<Expo
   // 颜色已经能把两类边分开），导出时统一拉成实线。
   const edges = Array.from(el.querySelectorAll<SVGPathElement>('.vue-flow__edge-path'))
   const dashBefore = edges.map((node) => node.style.strokeDasharray)
+  const fillsBefore = edges.map((node) => node.style.fill)
   // 箭头 marker 用的是 markerUnits="strokeWidth"，尺寸要乘以描边宽度。
   // html-to-image 序列化时拿不到正确的 stroke-width，箭头会被放大十几倍，
   // 变成从节点甩出去的大黑三角。改用用户坐标，尺寸就固定成 markerWidth。
-  const markers = Array.from(el.querySelectorAll<SVGMarkerElement>('marker'))
-  const unitsBefore = markers.map((node) => node.getAttribute('markerUnits'))
+  // 箭头在导出时整个去掉：marker 的 markerUnits 依赖 stroke-width，
+  // html-to-image 序列化时拿不到正确值，箭头会被放大成从节点甩出去的大块黑三角。
+  const endsBefore = edges.map((node) => node.getAttribute('marker-end'))
 
   el.classList.add('is-exporting')
   if (watermark) {
@@ -66,8 +68,12 @@ async function capture(el: HTMLElement | null, pixelRatio: number): Promise<Expo
     for (const node of edges) {
       node.style.strokeDasharray = 'none'
     }
-    for (const node of markers) {
-      node.setAttribute('markerUnits', 'userSpaceOnUse')
+    // 关键：边的 path 没有 fill 属性，靠 CSS 的 fill: none 保持不填充。
+    // html-to-image 内联样式时丢了这条规则，SVG 默认的 fill: black 就生效，
+    // 贝塞尔曲线围出的月牙形被整片填黑——横平竖直的短连线几乎看不出，
+    // 一旦是长弧线就是一大块黑。
+    for (const node of edges) {
+      node.style.fill = 'none'
     }
 
     // 边不再渲染点击热区（LinkEdge 里 interaction-width 设为 0），
@@ -95,11 +101,11 @@ async function capture(el: HTMLElement | null, pixelRatio: number): Promise<Expo
     el.classList.remove('is-exporting')
     edges.forEach((node, index) => {
       node.style.strokeDasharray = dashBefore[index] ?? ''
+      node.style.fill = fillsBefore[index] ?? ''
     })
-    markers.forEach((node, index) => {
-      const previous = unitsBefore[index]
-      if (previous == null) node.removeAttribute('markerUnits')
-      else node.setAttribute('markerUnits', previous)
+    edges.forEach((node, index) => {
+      const previous = endsBefore[index]
+      if (previous) node.setAttribute('marker-end', previous)
     })
 
     if (watermark) {

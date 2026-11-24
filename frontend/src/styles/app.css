@@ -820,6 +820,7 @@
   text-shadow: none !important;
 }
 
+
 /* 虚线边导出时必须拉成实线：html-to-image 渲染 stroke-dasharray 时，
    每段短线周围会叠出比背景更黑的块，连起来像一条黑带压在连线上。
    静态图里虚线不表达含义（「计划中」的语义由更淡的颜色承担），
