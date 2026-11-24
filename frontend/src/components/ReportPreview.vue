@@ -68,8 +68,15 @@ async function toWord(): Promise<void> {
   if (busy.value) return
   busy.value = 'word'
   try {
-    await exportVulnsWord(props.meta, props.vulns)
-    ui.toast('Word 报告已生成', 'ok')
+    const result = await exportVulnsWord(props.meta, props.vulns)
+    if (result.failed.length && !result.embedded) {
+      // 一张都没进去，多半是图片地址失效或存储路径不对，说清楚而不是让人打开才发现
+      ui.toast(`Word 已生成，但 ${result.failed.length} 张图片都没取到，文档里只有说明文字`, 'error')
+    } else if (result.failed.length) {
+      ui.toast(`Word 已生成，${result.embedded} 张图已嵌入，${result.failed.length} 张取不到`, 'warn')
+    } else {
+      ui.toast('Word 报告已生成', 'ok')
+    }
   } catch (err) {
     ui.toast(err instanceof Error ? err.message : '导出失败', 'error')
   } finally {

@@ -107,7 +107,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && useradd --system --create-home --shell /usr/sbin/nologin atlas
 
 LABEL org.opencontainers.image.title="RedTeam Atlas" \
-      org.opencontainers.image.version="4.4.0"
+      org.opencontainers.image.version="4.4.1"
 
 WORKDIR /app
 ENV PORT=8080 \

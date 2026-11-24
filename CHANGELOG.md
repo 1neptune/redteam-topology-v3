@@ -3,6 +3,44 @@
 官网 <https://github.com/1neptune/redteam-topology-v3>
 发布页 <https://github.com/1neptune/redteam-topology-v3/releases>
 
+## v4.4.1
+
+### 修复
+
+- **Word 里一张图都没有。** 根因是富文本清洗把图片删掉了：`sanitizeHtml` 只放行
+  `data:image/*`、`http(s)://`、`/api/pub/uploads/` 三种写法，站内图片的历史路径
+  （`/api/uploads/`、`/uploads/`、无前导斜杠的 `uploads/`）全部被 `child.remove()`，
+  于是编辑、预览、导出三处都看不到图。
+  - 改成只拦 `javascript:` `vbscript:` `file:` 这类可执行协议，其余一律放行
+- **详情存的是 Markdown 时导不出图。** 早期由 MCP 直接写入的详情是 `![alt](url)` 原文，
+  `htmlToBlocks` 用 DOMParser 解析 HTML，Markdown 被当成纯文本。
+  - 新增 `markdownImagesToHtml`，导出前先把 Markdown 图片语法转成 `<img>`
+- **图片地址提取太窄。** `primeImages` 只匹配双引号 HTML；现在单引号、无引号、
+  Markdown 语法都收。
+
+### 新增
+
+- 导出后按实际结果给提示：图片全没取到时明确说「文档里只有说明文字」，
+  部分取到时说「N 张已嵌入，M 张取不到」。取不到的图在正文里留一行说明，
+  不再静默留白。
+- `exportVulnsWord` 返回 `{ embedded, failed }`，调用方可据此判断。
+
+### 实测
+
+同一份报告放四种写法（HTML 双引号 / HTML 单引号 / Markdown 原文 / 绝对地址），
+导出的 docx：
+
+```
+media:    1 张 640x400（docx 去重后）
+drawing:  4 个
+无法嵌入: 无
+```
+
+三种旧路径（`/api/uploads/`、`/uploads/`、`uploads/`）也能保留到预览与导出环节。
+
+### 变更
+
+- 版本号升到 4.4.1。
 ## v4.4.0
 
 ### 新增

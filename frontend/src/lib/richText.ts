@@ -50,8 +50,11 @@ export function sanitizeHtml(html: string): string {
       }
       if (child.tagName === 'IMG') {
         const src = child.getAttribute('src') ?? ''
-        // data: 老数据、http(s) 外链、以及本站带签名的上传地址都放行
-        if (!/^data:image\//.test(src) && !/^https?:\/\//.test(src) && !/^\/api\/pub\/uploads\//.test(src)) {
+        // 只拦 javascript:/vbscript: 这类可执行协议；
+        // 其他一律放行——本站图片有 /api/pub/uploads、/api/uploads、/uploads 几种历史写法，
+        // 逐个前缀去卡很容易把正常图片误删，出现「导出没有图」。
+        const risky = /^\s*(javascript|vbscript|file):/i.test(src)
+        if (!src.trim() || risky) {
           child.remove()
           continue
         }
@@ -70,9 +73,18 @@ export interface RichBlock {
 }
 
 /** 把 HTML 拆成段落、列表项与图片，导出 Word 用 */
+/** 早期的详情可能存的是 Markdown（MCP 直接写入），先把图片语法转成 <img> */
+function markdownImagesToHtml(text: string): string {
+  if (!text.includes('![')) return text
+  return text.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_all, alt: string, src: string) => {
+    return `<img src="${src}" alt="${alt}">`
+  })
+}
+
 export function htmlToBlocks(html: string): RichBlock[] {
   if (!html) return []
-  const doc = new DOMParser().parseFromString(`<div id="root">${sanitizeHtml(html)}</div>`, 'text/html')
+  const prepared = markdownImagesToHtml(html)
+  const doc = new DOMParser().parseFromString(`<div id="root">${sanitizeHtml(prepared)}</div>`, 'text/html')
   const root = doc.getElementById('root')
   if (!root) return []
 

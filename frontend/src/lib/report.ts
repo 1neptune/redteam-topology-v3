@@ -245,7 +245,14 @@ function withPort(host?: string, port?: string): string {
 async function primeImages(vulns: Vulnerability[]): Promise<string[]> {
   const urls = new Set<string>()
   for (const item of vulns) {
-    for (const match of (item.detail ?? '').matchAll(/<img[^>]+src="([^"]+)"/g)) {
+    const detail = item.detail ?? ''
+    // HTML 写法：单引号、双引号、无引号都收
+    for (const match of detail.matchAll(/<img[^>]+src\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/gi)) {
+      const src = match[1] ?? match[2] ?? match[3] ?? ''
+      if (src && !src.startsWith('data:')) urls.add(src)
+    }
+    // Markdown 写法：早期 MCP 直接写入的详情
+    for (const match of detail.matchAll(/!\[[^\]]*\]\(([^)\s]+)\)/g)) {
       const src = match[1]
       if (src && !src.startsWith('data:')) urls.add(src)
     }
@@ -264,9 +271,18 @@ async function primeImages(vulns: Vulnerability[]): Promise<string[]> {
   return failed
 }
 
-export async function exportVulnsWord(meta: ReportMeta, vulns: Vulnerability[]): Promise<void> {
-  await primeImages(vulns)
+/** 导出结果：嵌进去几张、漏了几张，调用方据此给提示 */
+export interface WordExportResult {
+  embedded: number
+  failed: string[]
+}
+
+export async function exportVulnsWord(meta: ReportMeta, vulns: Vulnerability[]): Promise<WordExportResult> {
+  const failed = await primeImages(vulns)
   // 取不到的图在 shotParagraph 里会退化成说明文字，不会整个导出失败
+  if (failed.length) {
+    console.warn(`[report] ${failed.length} 张图片没能嵌入 Word：`, failed)
+  }
   const {
     AlignmentType,
     BorderStyle,
@@ -522,6 +538,15 @@ export async function exportVulnsWord(meta: ReportMeta, vulns: Vulnerability[]):
 
   const blob = await Packer.toBlob(doc)
   download(blob, reportFileName(meta, 'docx'))
+
+  // 数一数正文里一共有几张图，减掉取图失败的就是真正嵌进去的
+  const total = vulns.reduce((sum, item) => {
+    const detail = item.detail ?? ''
+    const html = (detail.match(/<img/gi) ?? []).length
+    const md = (detail.match(/!\[[^\]]*\]\(/g) ?? []).length
+    return sum + html + md
+  }, 0)
+  return { embedded: Math.max(0, total - failed.length), failed }
 }
 
 /**
