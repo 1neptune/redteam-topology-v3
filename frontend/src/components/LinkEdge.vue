@@ -79,7 +79,7 @@ const visible = computed(() => rows.value.length > 0)
     :id="id"
     :path="path"
     :marker-end="markerEnd"
-    :interaction-width="20"
+          :interaction-width="0"
     :style="{ stroke: strokeColor, strokeWidth, strokeDasharray: dashed ? '5 4' : undefined }"
   />
 

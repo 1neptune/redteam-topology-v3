@@ -14,7 +14,7 @@ services:
         APT_MIRROR: "${APT_MIRROR-mirrors.aliyun.com}"
         NPM_REGISTRY: "${NPM_REGISTRY-https://registry.npmmirror.com}"
         CARGO_MIRROR: "${CARGO_MIRROR-sparse+https://mirrors.aliyun.com/crates.io-index/}"
-    image: redteam-atlas:4.5.3
+    image: redteam-atlas:4.5.4
     container_name: redteam-atlas
     restart: unless-stopped
     ports:

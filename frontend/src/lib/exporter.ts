@@ -41,16 +41,7 @@ async function capture(el: HTMLElement | null, pixelRatio: number): Promise<Expo
   if (!el) throw new Error('画布还未准备好')
 
   const watermark = el.querySelector<HTMLElement>('[data-export-watermark]')
-  // 边的点击热区是 20px 宽的透明描边，浏览器里看不见，
-  // 但 html-to-image 把它序列化时会画成一条 20px 黑带压在连线上。
-  // 改 stroke-width 与 filter 都拦不住（对 SVG 子元素不可靠），
-  // 只有在快照前把它从 DOM 摘掉。
-  const interactions = Array.from(el.querySelectorAll<SVGElement>('.vue-flow__edge-interaction'))
-  const detached = interactions.map((node) => ({
-    node,
-    parent: node.parentElement,
-    next: node.nextElementSibling,
-  }))
+
   // 虚线边在快照里会出问题：html-to-image 渲染 stroke-dasharray 时，
   // 每段短线周围会叠出一层比背景更黑的块，连起来像一条黑带。
   // 静态图里虚线也不表达任何含义（那只是「计划中」的视觉提示，
@@ -71,9 +62,7 @@ async function capture(el: HTMLElement | null, pixelRatio: number): Promise<Expo
 
   try {
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
-    for (const item of detached) {
-      item.node.remove()
-    }
+
     for (const node of edges) {
       node.style.strokeDasharray = 'none'
     }
@@ -81,7 +70,12 @@ async function capture(el: HTMLElement | null, pixelRatio: number): Promise<Expo
       node.setAttribute('markerUnits', 'userSpaceOnUse')
     }
 
-
+    // 边不再渲染点击热区（LinkEdge 里 interaction-width 设为 0），
+    // 热区是 20px 宽的透明描边，html-to-image 会丢掉 stroke-opacity 把它画成黑带。
+    // 保留兜底：万一还有残留就清掉。
+    for (const node of Array.from(el.querySelectorAll('.vue-flow__edge-interaction'))) {
+      node.remove()
+    }
 
     const rect = el.getBoundingClientRect()
     const width = Math.round(rect.width * pixelRatio)
@@ -93,17 +87,6 @@ async function capture(el: HTMLElement | null, pixelRatio: number): Promise<Expo
       pixelRatio,
       skipFonts: true,
       cacheBust: true,
-      filter: (node) => {
-        const target = node as HTMLElement | SVGElement | null
-        const cls = target?.classList
-        if (!cls) return true
-        return !(
-          cls.contains('vue-flow__edge-interaction') ||
-          cls.contains('vue-flow__controls') ||
-          cls.contains('vue-flow__minimap') ||
-          cls.contains('vue-flow__attribution')
-        )
-      },
     })
 
     const bytes = Math.round((dataUrl.length - dataUrl.indexOf(',') - 1) * 0.75)
@@ -118,15 +101,7 @@ async function capture(el: HTMLElement | null, pixelRatio: number): Promise<Expo
       if (previous == null) node.removeAttribute('markerUnits')
       else node.setAttribute('markerUnits', previous)
     })
-    // 原样插回原来的位置，热区不能丢，否则连线点不中
-    for (const item of detached) {
-      if (!item.parent) continue
-      if (item.next && item.next.parentElement === item.parent) {
-        item.parent.insertBefore(item.node, item.next)
-      } else {
-        item.parent.appendChild(item.node)
-      }
-    }
+
     if (watermark) {
       watermark.style.opacity = '0'
       watermark.style.transition = ''
