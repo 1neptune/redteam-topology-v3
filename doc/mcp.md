@@ -112,7 +112,7 @@ curl -s http://<host>:8080/mcp \
   "result": {
     "protocolVersion": "2025-06-18",
     "capabilities": { "tools": { "listChanged": false } },
-    "serverInfo": { "name": "redteam-atlas", "version": "4.4.1" }
+    "serverInfo": { "name": "redteam-atlas", "version": "4.5.0" }
   }
 }
 ```
@@ -134,7 +134,7 @@ curl -s http://<host>:8080/mcp \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
 ```
 
-返回 20 个工具的完整 JSON Schema。
+返回 22 个工具的完整 JSON Schema。
 
 ### 3.4 调用工具
 
@@ -180,9 +180,9 @@ payload = json.loads(response["result"]["content"][0]["text"])
 
 ## 4. 工具参考
 
-共 20 个工具。权限按用途分三档：
+共 22 个工具。权限按用途分三档：
 
-- 读取类（`list_projects`、`get_project`、`search_graph`、`list_asset_types`）需对该项目有 viewer 及以上权限；
+- 读取类（`list_projects`、`get_project`、`search_graph`、`list_asset_types`、`export_report`、`export_topology_png`）需对该项目有 viewer 及以上权限；
 - 写入类（`ingest_attack_path`、`add_nodes`、`add_edges`、`update_node`、`set_vulnerability`、`remove_vulnerability`、`delete_node`、`delete_edge`、`upload_image`）需 editor 及以上；
 - 管理类（`update_project`、`delete_project`、`create_asset_type`、`add_member`）需项目 owner，`list_users`、`create_user` 需系统管理员。
 
@@ -493,21 +493,68 @@ payload = json.loads(response["result"]["content"][0]["text"])
 
 ### 4.10 search_graph
 
-在项目内按关键字搜索节点，匹配 `label`、`ip`、`os`、`notes`（不区分大小写）。
+在项目内按关键字搜索节点并**提取详情**。关键字不区分大小写，会依次比对
+`label`、`ip`、`domain`、`os`、`notes`、`kind`、自定义属性的 key 与 value，
+以及该节点漏洞的 `name` 和 `description`——渗透场景里常按漏洞名反查资产，例如
+`keyword: "上传"` 能直接找出存在文件上传问题的节点。
 
-```json
-{ "name": "search_graph", "arguments": { "project_id": "p_9f2c...", "keyword": "10.1.1" } }
-```
+返回的不只是摘要，每个命中都带完整字段、坐标、漏洞清单与相邻链路，
+通常一次调用就够定位节点，不必再 `get_project`。
 
 ```json
 {
-  "count": 2,
+  "name": "search_graph",
+  "arguments": { "project_id": "p_9f2c...", "keyword": "数据库", "limit": 5 }
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `project_id` | string | 是 | 项目 id |
+| `keyword` | string | 是 | 关键字；传空串返回全部节点 |
+| `limit` | number | 否 | 最多返回几条，默认 20，上限 200 |
+
+```json
+{
+  "count": 1,
+  "total": 1,
   "nodes": [
-    { "id": "n_8b4c...", "label": "堡垒机", "kind": "pivot", "ip": "10.1.1.5", "status": "control" },
-    { "id": "n_9d5e...", "label": "域控 DC01", "kind": "domain", "ip": "10.1.1.10", "status": "control" }
+    {
+      "id": "n_6751...",
+      "label": "核心数据库",
+      "kind": "database",
+      "ip": "10.0.3.50",
+      "port": "3306",
+      "domain": "",
+      "os": "",
+      "status": "control",
+      "notes": "MySQL 5.7",
+      "position": { "x": 320.0, "y": 280.0 },
+      "fields": [{ "key": "负责人", "value": "运维一组" }],
+      "vulnCount": 1,
+      "vulns": [
+        { "name": "数据库弱口令", "risk": "high", "description": "sa 口令为 P@ssw0rd" }
+      ],
+      "edges": [
+        { "id": "e_1a7c...", "from": "n_09c9...", "to": "n_6751...", "label": "内网横向" }
+      ],
+      "matched": ["label", "vulns"]
+    }
   ]
 }
 ```
+
+`matched` 指出这一条是被哪些字段命中的，便于判断相关性：
+
+| 取值 | 含义 |
+| --- | --- |
+| `label` / `ip` / `domain` / `os` / `notes` / `kind` | 命中对应字段 |
+| `fields` | 命中自定义属性的 key 或 value |
+| `vulns` | 命中漏洞名或漏洞说明 |
+| `all` | 关键字为空，返回全部 |
+
+结果按「名称完全相等 → 名称包含 → 其他」排序，同档内短名称优先，
+`count` 是本次返回条数，`total` 是命中总数（可能多于 `count`）。
 
 ### 4.11 list_asset_types
 
@@ -689,6 +736,94 @@ payload = json.loads(response["result"]["content"][0]["text"])
 ```
 
 单张上限 2MB，超出直接报错。图片存进数据目录后不会自动清理，删库不删图。
+### 4.21 export_report
+
+导出渗透测试报告，三种格式：`word`（.docx）、`pdf`、`png`（一张长图预览）。
+
+内容取自节点的漏洞记录：资产信息、每条漏洞的名称与风险、漏洞说明、
+Markdown 转出来的详情（含插图）、处置建议。图片从上传目录读取，
+按原始像素比例缩放到 460 宽、最高 520，读不到就在正文里留一行说明而不是静默留白。
+
+```json
+{
+  "name": "export_report",
+  "arguments": { "project_id": "p_9f2c...", "node_id": "外网门户系统", "format": "word" }
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `project_id` | string | 是 | 项目 id |
+| `node_id` | string | 否 | 只导这一个节点，填节点 id 或名称；省略则导出全部有漏洞的节点 |
+| `format` | string | 是 | `word` / `pdf` / `png` |
+
+```json
+{
+  "format": "word",
+  "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "bytes": 32037,
+  "nodes": 1,
+  "vulns": 1,
+  "url": "/api/pub/exports/MCP_报告导出验证-外网门户系统-漏洞报告-a1b2c3d4e5f6.docx"
+}
+```
+
+拿到 `url` 后拼上服务地址直接下载：
+
+```bash
+curl -O "http://<host>:6080/api/pub/exports/MCP_报告导出验证-外网门户系统-漏洞报告-a1b2c3d4e5f6.docx"
+```
+
+三种格式各自的用法：
+
+| format | 适用 | 特点 |
+| --- | --- | --- |
+| `word` | 交给客户或需要再编辑的场合 | 结构化 docx，文字可改，插图按比例嵌入 |
+| `pdf` | 归档、发邮件 | A4 竖版，每页内容光栅化后封装，排版固定不会被改乱 |
+| `png` | 贴进群里、嵌进别的文档 | 多页竖向拼成一张长图 |
+
+多节点导出时按节点分节，节标题为 `【节点名】`，其余结构不变。
+项目里一条漏洞都没有时返回 400，不会产出空报告。
+
+### 4.22 export_topology_png
+
+把画布拓扑导出成 PNG：节点卡片（含资产类型色条、IP、域名、系统、备注、自定义属性、
+漏洞角标）、带箭头的链路、链路标签，深色底，2 倍图。
+
+```json
+{
+  "name": "export_topology_png",
+  "arguments": { "project_id": "p_9f2c...", "title": "某客户内网" }
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `project_id` | string | 是 | 项目 id |
+| `title` | string | 否 | 图上的标题，默认用项目名 |
+
+```json
+{
+  "format": "png",
+  "bytes": 129520,
+  "nodes": 3,
+  "edges": 2,
+  "url": "/api/pub/exports/MCP_报告导出验证-拓扑-b7d2f3f1ad9a.png"
+}
+```
+
+图幅按节点包围盒自动裁剪，四周留 48px 边距，顶部 56px 给标题。
+链路锚点按两节点的相对位置决定：横向排列接左右边，纵向排列接上下边，
+所以竖排的拓扑不会被连线横穿。
+
+### 4.23 导出件地址与留存
+
+两个导出工具都把文件写进数据目录的 `uploads/exports/`，返回
+`/api/pub/exports/<文件名>`。这个地址是公开的，不需要登录态：
+
+- 文件名由服务端生成（可读前缀 + 12 位随机串），外部猜不到别人的文件；
+- 每次导出会顺手清掉 24 小时前的旧文件，目录不会一直长；
+- 需要长期保存就下载到本地，别指望它在服务器上一直躺着。
 ## 5. 典型工作流
 
 ### 5.1 从扫描结果画一张新图
@@ -913,7 +1048,7 @@ tools/call get_project { project_id }
 ```json
 {
   "protocolVersion": "2025-06-18",
-  "serverInfo": { "name": "redteam-atlas", "version": "4.4.1" }
+  "serverInfo": { "name": "redteam-atlas", "version": "4.5.0" }
 }
 ```
 
@@ -1015,7 +1150,7 @@ MCP 只有一次协商机会：`initialize`。
 | `true` | 工具会增删，变化时服务端主动发 `notifications/tools/list_changed` | 必须监听该通知，收到后重新拉 `tools/list` |
 | `false` | 工具集固定不变 | 拉一次 `tools/list` 就能一直缓存，不必监听 |
 
-本服务端的 20 个工具是编译进二进制的常量，运行期不增不减，因此恒为 `false`。
+本服务端的 22 个工具是编译进二进制的常量，运行期不增不减，因此恒为 `false`。
 客户端据此可以省掉一次订阅和若干次重复拉取。
 
 ### 11.7 只实现 tools，其他能力没有

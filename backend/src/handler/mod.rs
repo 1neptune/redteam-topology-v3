@@ -1,6 +1,7 @@
 //! Handler 层：只做入参校验、组装响应，不写 SQL、不写跨模块业务。
 
 pub mod asset_handler;
+pub mod export_handler;
 pub mod audit_handler;
 pub mod auth_handler;
 pub mod project_handler;

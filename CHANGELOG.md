@@ -3,6 +3,55 @@
 官网 <https://github.com/1neptune/redteam-topology-v3>
 发布页 <https://github.com/1neptune/redteam-topology-v3/releases>
 
+## v4.5.0
+
+### 新增
+
+MCP 从 20 个工具扩到 22 个，报告与拓扑可以直接从 Agent 侧产出文件。
+
+- **`export_report`**：导出渗透测试报告，`format` 可选 `word` / `pdf` / `png`。
+  - `word` 用 docx-rs 生成结构化文档，插图按原始像素比例缩放到 460 宽、最高 520；
+  - `pdf` 把每页内容光栅化成 JPEG 后封装，A4 竖版，排版固定；
+  - `png` 多页竖向拼成一张长图，方便直接贴出去。
+  - 不传 `node_id` 时导出整个项目全部有漏洞的节点，按 `【节点名】` 分节。
+- **`export_topology_png`**：把画布拓扑导出成 PNG。节点卡片带资产类型色条、
+  IP / 域名 / 系统 / 备注 / 自定义属性与漏洞角标；链路按两节点相对位置选锚点，
+  横向排列接左右边、纵向排列接上下边，竖排拓扑不会被连线横穿。
+- **`search_graph` 升级为详细提取**：除 `label` / `ip` / `os` / `notes` 外，
+  还匹配 `domain`、`kind`、自定义属性的 key 与 value、以及漏洞名与漏洞说明
+  （可按漏洞反查资产）。每条命中返回完整字段、坐标、漏洞清单与相邻链路，
+  并用 `matched` 标出被哪些字段命中；结果按「完全相等 → 包含 → 其他」排序，
+  新增 `limit`（默认 20，上限 200）。
+
+### 新增基础设施
+
+- `GET /api/pub/exports/{name}`：导出件下载。文件名由服务端生成（可读前缀 + 12 位随机串），
+  公开可访问不含凭据，24 小时前的旧文件自动清理。
+- 渲染层 `backend/src/mcp/render.rs`：拓扑与报告共用的 SVG 排版，PNG 与 PDF 都从这一份出。
+- 导出层 `backend/src/mcp/export.rs`：SVG 光栅化（resvg + fontdb）、docx 生成、手写 PDF 封装。
+- Dockerfile 运行镜像加装 `fonts-noto-cjk`，否则容器里渲染中文会变成方框。
+
+### 修复
+
+- **drawing 与 media 数量对不上**：图片地址里的 id 不带扩展名，而落盘文件名带（`img_x.png`），
+  精确路径找不到时按 `id.*` 再扫一遍目录。
+- **报告时间差 8 小时**：时间戳是 UTC，展示时换算到东八区。
+- **画布导出全黑**：SVG 颜色常量自带 `#`，模板里又写了一层，产出 `fill="##0a0e14"`，
+  解析器把整层丢掉。加测试断言 SVG 里不出现双井号。
+- **PDF 页树错位**：`Page` 对象编号从 4 起算，实际应为 3，导致 MuPDF 报
+  `non-page object in page tree`。
+
+### 实测
+
+```
+word  32037 字节   media 2 张  800x420 / 720x320  显示 460x241 / 460x204
+pdf   347 KB       2 页，每页 1 张 1588x2246 JPEG
+png   report 327 KB、topology 129 KB  1280x1096
+```
+
+### 变更
+
+- 版本号升到 4.5.0。
 ## v4.4.1
 
 ### 修复

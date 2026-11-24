@@ -8,7 +8,7 @@
 openapi: 3.0.3
 info:
   title: RedTeam Atlas API
-  version: 4.4.1
+  version: 4.5.0
   description: 红队攻防资产与攻击路径拓扑平台
 servers:
   - url: http://localhost:8080/api
@@ -718,6 +718,19 @@ paths:
             image/png:
               schema: { type: string, format: binary }
         '404': { description: 签名无效或内容不存在 }
+  /pub/exports/{name}:
+    get:
+      summary: 下载导出件（公开）
+      description: MCP 的 export_report / export_topology_png 产出的 docx、pdf、png 都落在这里，文件名由服务端生成；24 小时前的旧文件会被自动清理
+      parameters:
+        - { name: name, in: path, required: true, schema: { type: string }, description: 导出文件名，形如 报告名-a1b2c3d4e5f6.docx }
+      responses:
+        '200':
+          description: 文件二进制；Content-Type 按扩展名给出 docx / pdf / png
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '404': { description: 文件名不合法或文件已过期 }
   /uploads/{id}:
     get:
       summary: 读取图标（需登录，返回图片流）

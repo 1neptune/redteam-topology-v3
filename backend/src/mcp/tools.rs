@@ -184,6 +184,31 @@ pub fn definitions() -> Vec<Value> {
             }
         }),
         json!({
+            "name": "export_report",
+            "description": "导出渗透测试报告。format=word 生成 .docx，pdf 生成 PDF，png 生成一张长图预览。不传 node_id 时导出整个项目所有节点的漏洞，按节点分节。返回可下载地址。",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": { "type": "string" },
+                    "node_id": { "type": "string", "description": "只导出这一个节点；省略则导出整个项目" },
+                    "format": { "type": "string", "enum": ["word", "pdf", "png"] }
+                },
+                "required": ["project_id", "format"]
+            }
+        }),
+        json!({
+            "name": "export_topology_png",
+            "description": "把画布拓扑导出成 PNG：节点卡片、链路箭头、资产类型配色，2 倍图。返回可下载地址。",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": { "type": "string" },
+                    "title": { "type": "string", "description": "图上的标题，默认用项目名" }
+                },
+                "required": ["project_id"]
+            }
+        }),
+        json!({
             "name": "list_asset_types",
             "description": "列出可用的资产组件类型（内置 + 自定义）",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
@@ -314,6 +339,10 @@ struct IngestEdge {
     status: String,
 }
 
+fn arg_i64(args: &Value, key: &str) -> Option<i64> {
+    args.get(key).and_then(|v| v.as_i64())
+}
+
 fn arg_str(args: &Value, key: &str) -> String {
     args.get(key)
         .and_then(|v| v.as_str())
@@ -406,28 +435,242 @@ pub async fn call(
             let project_id = arg_str(args, "project_id");
             let keyword = arg_str(args, "keyword").to_lowercase();
             let detail = project_service::detail(&state.pool, &state.cfg, user, &project_id).await?;
-            let hits: Vec<Value> = detail
-                .graph
-                .nodes
-                .iter()
-                .filter(|n| {
-                    keyword.is_empty()
-                        || n.data.label.to_lowercase().contains(&keyword)
-                        || n.data.ip.to_lowercase().contains(&keyword)
-                        || n.data.os.to_lowercase().contains(&keyword)
-                        || n.data.notes.to_lowercase().contains(&keyword)
-                })
-                .map(|n| {
-                    json!({
-                        "id": n.id,
-                        "label": n.data.label,
-                        "kind": n.data.kind,
-                        "ip": n.data.ip,
-                        "status": n.data.status
+            let limit = arg_i64(args, "limit").unwrap_or(20).clamp(1, 200) as usize;
+
+            let mut hits: Vec<Value> = Vec::new();
+            for node in &detail.graph.nodes {
+                // 命中字段逐个记下来，调用方一眼看出为什么匹配
+                let mut matched: Vec<&str> = Vec::new();
+                if keyword.is_empty() {
+                    matched.push("all");
+                } else {
+                    if node.data.label.to_lowercase().contains(&keyword) {
+                        matched.push("label");
+                    }
+                    if node.data.ip.to_lowercase().contains(&keyword) {
+                        matched.push("ip");
+                    }
+                    if node.data.domain.to_lowercase().contains(&keyword) {
+                        matched.push("domain");
+                    }
+                    if node.data.os.to_lowercase().contains(&keyword) {
+                        matched.push("os");
+                    }
+                    if node.data.notes.to_lowercase().contains(&keyword) {
+                        matched.push("notes");
+                    }
+                    if node.data.kind.to_lowercase().contains(&keyword) {
+                        matched.push("kind");
+                    }
+                    for field in &node.data.fields {
+                        if field.key.to_lowercase().contains(&keyword)
+                            || field.value.to_lowercase().contains(&keyword)
+                        {
+                            matched.push("fields");
+                            break;
+                        }
+                    }
+                    // 漏洞名与说明也算命中，渗透场景里常按漏洞反查资产
+                    for vuln in &node.data.vulns {
+                        if vuln.name.to_lowercase().contains(&keyword)
+                            || vuln.description.to_lowercase().contains(&keyword)
+                        {
+                            matched.push("vulns");
+                            break;
+                        }
+                    }
+                }
+                if matched.is_empty() {
+                    continue;
+                }
+
+                // 相关链路也带上，省一次 get_project
+                let links: Vec<Value> = detail
+                    .graph
+                    .edges
+                    .iter()
+                    .filter(|e| e.source == node.id || e.target == node.id)
+                    .map(|e| {
+                        json!({
+                            "id": e.id,
+                            "from": e.source,
+                            "to": e.target,
+                            "label": e.label,
+                        })
                     })
-                })
-                .collect();
-            Ok(json!({ "count": hits.len(), "nodes": hits }))
+                    .collect();
+
+                hits.push(json!({
+                    "id": node.id,
+                    "label": node.data.label,
+                    "kind": node.data.kind,
+                    "ip": node.data.ip,
+                    "port": node.data.port,
+                    "domain": node.data.domain,
+                    "os": node.data.os,
+                    "status": node.data.status,
+                    "notes": node.data.notes,
+                    "position": { "x": node.position.x, "y": node.position.y },
+                    "fields": node.data.fields.iter().map(|f| json!({"key": f.key, "value": f.value})).collect::<Vec<_>>(),
+                    "vulnCount": node.data.vulns.len(),
+                    "vulns": node.data.vulns.iter().map(|v| json!({
+                        "name": v.name,
+                        "risk": v.risk,
+                        "description": v.description,
+                    })).collect::<Vec<_>>(),
+                    "edges": links,
+                    "matched": matched,
+                }));
+            }
+
+            // 名称精确命中的排前面，其次按名称长度（越短越相关）
+            hits.sort_by(|a, b| {
+                let score = |v: &Value| -> (u8, usize) {
+                    let name = v["label"].as_str().unwrap_or("").to_lowercase();
+                    let exact = if !keyword.is_empty() && name == keyword { 0 } else if name.contains(&keyword) { 1 } else { 2 };
+                    (exact, name.chars().count())
+                };
+                score(a).cmp(&score(b))
+            });
+
+            let total = hits.len();
+            hits.truncate(limit);
+            Ok(json!({ "count": hits.len(), "total": total, "nodes": hits }))
+        }
+        "export_topology_png" => {
+            let project_id = arg_str(args, "project_id");
+            let detail = project_service::detail(&state.pool, &state.cfg, user, &project_id).await?;
+            let mut title = arg_str(args, "title");
+            if title.is_empty() {
+                title = detail.project.name.clone();
+            }
+            let bytes = crate::mcp::export::canvas_png(&detail.graph, &title)?;
+            let url = crate::mcp::export::publish(
+                &state.cfg,
+                &bytes,
+                "png",
+                &format!("{}-拓扑", detail.project.name),
+            )
+            .await?;
+            Ok(json!({
+                "format": "png",
+                "bytes": bytes.len(),
+                "nodes": detail.graph.nodes.len(),
+                "edges": detail.graph.edges.len(),
+                "url": url,
+                "download": format!("{url}"),
+            }))
+        }
+        "export_report" => {
+            let project_id = arg_str(args, "project_id");
+            let node_id = arg_str(args, "node_id");
+            let format = {
+                let raw = arg_str(args, "format").to_lowercase();
+                if raw.is_empty() { "word".to_string() } else { raw }
+            };
+            if !matches!(format.as_str(), "word" | "pdf" | "png") {
+                return Err(AppError::BadRequest("format 只支持 word / pdf / png".into()));
+            }
+            let detail = project_service::detail(&state.pool, &state.cfg, user, &project_id).await?;
+            let images = crate::mcp::export::ImageStore::new(detail_upload_root(&state.cfg));
+
+            // 选定要导出的节点：指定了就只导它，否则导全部有漏洞的节点
+            let targets: Vec<&crate::model::GraphNode> = if node_id.is_empty() {
+                detail
+                    .graph
+                    .nodes
+                    .iter()
+                    .filter(|n| !n.data.vulns.is_empty())
+                    .collect()
+            } else {
+                let found = detail
+                    .graph
+                    .nodes
+                    .iter()
+                    .filter(|n| n.id == node_id || n.data.label == node_id)
+                    .collect::<Vec<_>>();
+                if found.is_empty() {
+                    return Err(AppError::NotFound(format!("节点 {node_id} 不存在")));
+                }
+                found
+            };
+
+            let generated_at = crate::service::now_ms();
+            let stamp = format_time(generated_at);
+            let author = user.display_name.clone();
+
+            let mut sections: Vec<(crate::mcp::render::ReportMeta, Vec<crate::model::Vulnerability>)> = Vec::new();
+            for node in &targets {
+                sections.push((
+                    crate::mcp::render::ReportMeta {
+                        project: detail.project.name.clone(),
+                        node: if node.data.label.is_empty() { "未命名资产".into() } else { node.data.label.clone() },
+                        kind: node.data.kind.clone(),
+                        ip: node.data.ip.clone(),
+                        port: node.data.port.clone(),
+                        domain: node.data.domain.clone(),
+                        status: node.data.status.clone(),
+                        notes: node.data.notes.clone(),
+                        generated_at: stamp.clone(),
+                        author: author.clone(),
+                    },
+                    node.data.vulns.clone(),
+                ));
+            }
+            if sections.is_empty() {
+                return Err(AppError::BadRequest("该项目还没有任何漏洞记录，无需导出".into()));
+            }
+
+            // 多节点时把内容拼成一份：元信息用项目级，漏洞按节点累加
+            let meta = sections[0].0.clone();
+            let mut all_vulns: Vec<crate::model::Vulnerability> = Vec::new();
+            if sections.len() > 1 {
+                for (sec_meta, vulns) in &sections {
+                    let mut head = crate::model::Vulnerability {
+                        name: format!("【{}】", sec_meta.node),
+                        ..Default::default()
+                    };
+                    head.risk = String::new();
+                    all_vulns.push(head);
+                    all_vulns.extend(vulns.iter().cloned());
+                }
+            } else {
+                all_vulns = sections[0].1.clone();
+            }
+
+            let stem = if node_id.is_empty() {
+                format!("{}-渗透测试报告", detail.project.name)
+            } else {
+                format!("{}-{}-漏洞报告", detail.project.name, sections[0].0.node)
+            };
+
+            let (bytes, ext, mime) = match format.as_str() {
+                "word" => (
+                    crate::mcp::export::report_word(&meta, &all_vulns, &images)?,
+                    "docx",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                ),
+                "pdf" => (
+                    crate::mcp::export::report_pdf(&meta, &all_vulns, &images)?,
+                    "pdf",
+                    "application/pdf",
+                ),
+                _ => (
+                    crate::mcp::export::report_png(&meta, &all_vulns, &images)?,
+                    "png",
+                    "image/png",
+                ),
+            };
+
+            let url = crate::mcp::export::publish(&state.cfg, &bytes, ext, &stem).await?;
+            Ok(json!({
+                "format": format,
+                "mime": mime,
+                "bytes": bytes.len(),
+                "nodes": sections.len(),
+                "vulns": all_vulns.len(),
+                "url": url,
+            }))
         }
         "list_asset_types" => {
             let list = crate::service::asset_service::list(&state.pool).await?;
@@ -1157,4 +1400,38 @@ fn assign_layers(ids: &[String], edges: &[(String, String)]) -> HashMap<String, 
         }
     }
     layers
+}
+/// 上传目录：导出时的图片来源
+fn detail_upload_root(cfg: &crate::config::Config) -> std::path::PathBuf {
+    cfg.upload_dir.clone()
+}
+
+/// 毫秒时间戳转成「2026-11-24 11:42」这种给人看的写法
+fn format_time(ms: i64) -> String {
+    // 时间戳是 UTC，展示时换算到东八区
+    let secs = ms.div_euclid(1000) + 8 * 3600;
+    let days = secs.div_euclid(86_400);
+    let rem = secs.rem_euclid(86_400);
+    let (h, m) = (rem / 3600, (rem % 3600) / 60);
+
+    // 从 1970-01-01 起算的民用历，够用且不引 chrono
+    let mut year = 1970i64;
+    let mut left = days;
+    loop {
+        let leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+        let len = if leap { 366 } else { 365 };
+        if left < len {
+            break;
+        }
+        left -= len;
+        year += 1;
+    }
+    let leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+    let months = [31, if leap { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let mut month = 0usize;
+    while month < 12 && left >= months[month] as i64 {
+        left -= months[month] as i64;
+        month += 1;
+    }
+    format!("{year:04}-{:02}-{:02} {h:02}:{m:02}", month + 1, left + 1)
 }

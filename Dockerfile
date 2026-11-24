@@ -102,12 +102,13 @@ RUN if [ -n "$APT_MIRROR" ]; then \
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates tini curl gosu \
+    # fonts-noto-cjk：MCP 导出 PNG/PDF 时要用中文字体，缺了中文会渲染成方框
+    && apt-get install -y --no-install-recommends ca-certificates tini curl gosu fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --system --create-home --shell /usr/sbin/nologin atlas
 
 LABEL org.opencontainers.image.title="RedTeam Atlas" \
-      org.opencontainers.image.version="4.4.1"
+      org.opencontainers.image.version="4.5.0"
 
 WORKDIR /app
 ENV PORT=8080 \

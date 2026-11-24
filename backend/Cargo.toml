@@ -1,6 +1,6 @@
 [package]
 name = "redteam-atlas"
-version = "4.4.1"
+version = "4.5.0"
 edition = "2021"
 description = "RedTeam Atlas - red team asset and attack path topology backend"
 
@@ -28,6 +28,10 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 hmac = "0.13.0"
 sha2 = "0.11.1"
+docx-rs = "0.4"
+resvg = "0.44"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+fontdb = "0.22"
 
 [profile.release]
 strip = true

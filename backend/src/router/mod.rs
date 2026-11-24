@@ -10,7 +10,7 @@ use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
-use crate::handler::{asset_handler, audit_handler, auth_handler, project_handler, system_handler, user_handler};
+use crate::handler::{asset_handler, audit_handler, auth_handler, export_handler, project_handler, system_handler, user_handler};
 use crate::mcp;
 use crate::middleware;
 use crate::state::AppState;
@@ -74,6 +74,8 @@ pub fn build(state: AppState) -> Router {
         .route("/uploads/{id}", get(asset_handler::get_upload))
         // 正文插图：短签名代替登录态，浏览器可直接加载并缓存
         .route("/pub/uploads/{id}", get(asset_handler::get_public_upload))
+        // 导出件：报告 docx/pdf、拓扑 png，文件名由服务端生成
+        .route("/pub/exports/{name}", get(export_handler::get_export))
         // 全局审计
         .route("/audit", get(audit_handler::list));
 
