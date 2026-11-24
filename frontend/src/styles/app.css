@@ -573,9 +573,141 @@
   overflow: hidden;
 }
 
-.canvas-hud {
+/* ── 节点搜索：浮在画布左上，与左下角的状态栏成对角 ────────── */
+.node-search {
   position: absolute;
   top: var(--space-xs);
+  left: var(--space-xs);
+  width: 248px;
+  z-index: var(--z-raised);
+}
+
+.node-search__box {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  height: 30px;
+  padding: 0 var(--space-xs);
+  background: var(--color-paper-2);
+  border: var(--rule-hair) solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  transition: border-color var(--dur-micro) var(--ease-out);
+}
+
+.node-search__box:focus-within {
+  border-color: var(--color-accent);
+}
+
+.node-search__box svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: var(--color-muted);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+.node-search__box .input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: var(--text-xs);
+}
+
+.node-search__box .input:focus-visible {
+  outline: none;
+}
+
+/* 原生清除叉：暗色下默认样式太扎眼，压淡一点 */
+.node-search__box .input::-webkit-search-cancel-button {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  background: var(--color-muted);
+  clip-path: polygon(20% 0, 50% 30%, 80% 0, 100% 20%, 70% 50%, 100% 80%, 80% 100%, 50% 70%, 20% 100%, 0 80%, 30% 50%, 0 20%);
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity var(--dur-micro) var(--ease-out);
+}
+
+.node-search__box .input::-webkit-search-cancel-button:hover {
+  opacity: 1;
+}
+
+.node-search__list {
+  list-style: none;
+  margin: var(--space-3xs) 0 0;
+  padding: var(--space-3xs);
+  background: var(--color-paper-2);
+  border: var(--rule-hair) solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-pop);
+  max-height: 260px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.node-search__item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+  width: 100%;
+  padding: var(--space-3xs) var(--space-2xs);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--dur-micro) var(--ease-out);
+}
+
+.node-search__item.is-active {
+  background: var(--color-accent-soft);
+}
+
+.node-search__item:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.node-search__name {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-xs);
+  color: var(--color-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node-search__meta {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--color-muted);
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node-search__empty {
+  margin: var(--space-3xs) 0 0;
+  padding: var(--space-2xs) var(--space-xs);
+  background: var(--color-paper-2);
+  border: var(--rule-hair) solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+.canvas-hud {
+  position: absolute;
+  /* 搜索框与下拉占左上；状态栏放左下，抬高避开缩放控件 */
+  bottom: calc(var(--space-xs) + 96px);
   left: var(--space-xs);
   display: flex;
   align-items: center;

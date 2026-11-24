@@ -112,7 +112,7 @@ curl -s http://<host>:8080/mcp \
   "result": {
     "protocolVersion": "2025-06-18",
     "capabilities": { "tools": { "listChanged": false } },
-    "serverInfo": { "name": "redteam-atlas", "version": "4.3.1" }
+    "serverInfo": { "name": "redteam-atlas", "version": "4.4.0" }
   }
 }
 ```
@@ -913,7 +913,7 @@ tools/call get_project { project_id }
 ```json
 {
   "protocolVersion": "2025-06-18",
-  "serverInfo": { "name": "redteam-atlas", "version": "4.3.1" }
+  "serverInfo": { "name": "redteam-atlas", "version": "4.4.0" }
 }
 ```
 

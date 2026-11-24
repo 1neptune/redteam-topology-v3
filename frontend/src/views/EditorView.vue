@@ -32,6 +32,7 @@ import { useCatalogStore } from '@/stores/catalog'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { exportCanvasPng, downloadBlob, renderCanvasPng, saveImage, type ExportImage } from '@/lib/exporter'
+import { bestScore } from '@/lib/fuzzy'
 import { fileStamp, formatClock, safeFilename } from '@/lib/format'
 import { resolveType } from '@/lib/nodeTypes'
 import * as projectApi from '@/api/project'
@@ -273,6 +274,82 @@ function onDrop(event: DragEvent): void {
 }
 
 /** 双击空白处快速新建主机 */
+/** 节点搜索：输入后模糊匹配节点名，选中即定位 */
+const searchKeyword = ref('')
+const searchOpen = ref(false)
+const searchIndex = ref(0)
+const searchInput = ref<HTMLInputElement | null>(null)
+
+/** 定位后回填关键字，此时不要再把下拉弹出来 */
+let suppressSearchOpen = false
+
+const searchHits = computed(() => {
+  const kw = searchKeyword.value.trim()
+  if (!kw) return []
+
+  return editor.nodes
+    .map((node) => ({
+      node,
+      score: bestScore(kw, [node.data.label || '', node.data.ip || '', node.data.domain || '']),
+    }))
+    .filter((row): row is { node: (typeof editor.nodes)[number]; score: number } => row.score !== null)
+    .sort((a, b) => a.score - b.score)
+    .slice(0, 8)
+})
+
+/**
+ * 定位到一个节点：选中它，并把视野聚到它身上。
+ *
+ * 选中写在节点自身的 selected 上——Vue Flow 认这个字段，
+ * store 里的 selectedNodeId 只驱动右侧属性面板，两者都要给。
+ */
+async function focusNode(node: (typeof editor.nodes)[number]): Promise<void> {
+  editor.selectNode(node.id)
+  for (const item of nodes.value) {
+    item.selected = item.id === node.id
+  }
+  searchOpen.value = false
+  suppressSearchOpen = true
+  searchKeyword.value = node.data.label || ''
+  await nextTick()
+  // 只聚焦这一个节点；节点高度随内容变，让它自己算中心
+  await fitView({ nodes: [node.id], padding: 0.8, duration: 260, maxZoom: 1.2 })
+}
+
+/** 回车取第一条，上下键在结果里移动 */
+function onSearchKey(event: KeyboardEvent): void {
+  if (event.key === 'Escape') {
+    searchOpen.value = false
+    searchKeyword.value = ''
+    return
+  }
+  if (!searchHits.value.length) return
+  if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    searchIndex.value = (searchIndex.value + 1) % searchHits.value.length
+    return
+  }
+  if (event.key === 'ArrowUp') {
+    event.preventDefault()
+    searchIndex.value = (searchIndex.value - 1 + searchHits.value.length) % searchHits.value.length
+    return
+  }
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    const hit = searchHits.value[searchIndex.value] ?? searchHits.value[0]
+    if (hit) void focusNode(hit.node)
+  }
+}
+
+/** 输入变化时重置高亮项 */
+watch(searchKeyword, () => {
+  searchIndex.value = 0
+  if (suppressSearchOpen) {
+    suppressSearchOpen = false
+    return
+  }
+  searchOpen.value = searchKeyword.value.trim().length > 0
+})
 function onCanvasDoubleClick(event: MouseEvent): void {
   if (!editor.canEdit) return
   const target = event.target as HTMLElement | null
@@ -649,6 +726,38 @@ async function goBack(): Promise<void> {
             mask-color="rgba(10,14,20,0.7)"
           />
         </VueFlow>
+
+        <div class="node-search atlas-export-hide">
+          <div class="node-search__box">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.2-3.2" /></svg>
+            <input
+              ref="searchInput"
+              v-model="searchKeyword"
+              class="input"
+              type="search"
+              placeholder="搜索节点"
+              aria-label="搜索节点"
+              spellcheck="false"
+              @keydown="onSearchKey"
+              @focus="searchOpen = searchKeyword.trim().length > 0"
+            />
+          </div>
+          <ul v-if="searchOpen && searchHits.length" class="node-search__list" role="listbox">
+            <li v-for="(hit, index) in searchHits" :key="hit.node.id">
+              <button
+                type="button"
+                class="node-search__item"
+                :class="{ 'is-active': index === searchIndex }"
+                @mouseenter="searchIndex = index"
+                @click="focusNode(hit.node)"
+              >
+                <span class="node-search__name">{{ hit.node.data.label || '未命名' }}</span>
+                <span class="node-search__meta mono">{{ hit.node.data.ip || hit.node.data.domain || '' }}</span>
+              </button>
+            </li>
+          </ul>
+          <p v-else-if="searchOpen" class="node-search__empty">没有匹配的节点</p>
+        </div>
 
         <div class="canvas-hud atlas-export-hide">
           <span><b>{{ editor.stats.nodes }}</b> 节点</span>
