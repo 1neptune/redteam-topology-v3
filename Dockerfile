@@ -1,17 +1,21 @@
 # syntax=docker/dockerfile:1.7
 #
-# 构建参数（可在 .env 或 --build-arg 里覆盖，见 docker-compose.yml 的 build.args）
-#   APT_MIRROR     Debian 包源。国内机器设成 mirrors.aliyun.com 之类能快十倍以上
-#   NPM_REGISTRY   npm 源，同上
-#   CARGO_MIRROR   crates.io 镜像，写成 sparse+https://... 形式；空则用官方源
+# 构建参数：默认走阿里云镜像，国内机器直接构建即可，不必先配 .env。
+#   APT_MIRROR     Debian 包源域名，替换 sources.list 里的 deb.debian.org
+#   NPM_REGISTRY   npm 源（npmmirror 由阿里维护）
+#   CARGO_MIRROR   crates.io 索引，sparse 形式
+#
+# 换回官方源：构建时传空值，例如
+#   docker compose build --build-arg APT_MIRROR= --build-arg NPM_REGISTRY= --build-arg CARGO_MIRROR=
+# 或用其他镜像站：APT_MIRROR=mirrors.tuna.tsinghua.edu.cn
 
-ARG APT_MIRROR=""
-ARG NPM_REGISTRY=""
-ARG CARGO_MIRROR=""
+ARG APT_MIRROR="mirrors.aliyun.com"
+ARG NPM_REGISTRY="https://registry.npmmirror.com"
+ARG CARGO_MIRROR="sparse+https://mirrors.aliyun.com/crates.io-index/"
 
 # ---------- 前端构建 ----------
 FROM node:22-alpine AS web
-ARG NPM_REGISTRY=""
+ARG NPM_REGISTRY="https://registry.npmmirror.com"
 WORKDIR /build
 
 # 只有设置了镜像源才切，没设置就走官方源
@@ -27,8 +31,12 @@ RUN npm run build
 
 # ---------- 后端构建 ----------
 FROM rust:1-slim-bookworm AS api
-ARG APT_MIRROR=""
-ARG CARGO_MIRROR=""
+ARG APT_MIRROR="mirrors.aliyun.com"
+ARG CARGO_MIRROR="sparse+https://mirrors.aliyun.com/crates.io-index/"
+
+# rustup 与工具链也走阿里，仅在镜像自带的 toolchain 不够用时才会真正下载
+ENV RUSTUP_DIST_SERVER="https://mirrors.aliyun.com/rustup" \
+    RUSTUP_UPDATE_ROOT="https://mirrors.aliyun.com/rustup/rustup"
 
 # 切包源：把 deb.debian.org 换成镜像站，只改 sources.list
 RUN if [ -n "$APT_MIRROR" ]; then \
@@ -92,7 +100,7 @@ RUN size=$(stat -c%s /build/out/redteam-atlas) \
 
 # ---------- 运行时 ----------
 FROM debian:bookworm-slim
-ARG APT_MIRROR=""
+ARG APT_MIRROR="mirrors.aliyun.com"
 
 RUN if [ -n "$APT_MIRROR" ]; then \
         sed -i "s|deb.debian.org|$APT_MIRROR|g" /etc/apt/sources.list.d/debian.sources 2>/dev/null \
@@ -108,7 +116,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && useradd --system --create-home --shell /usr/sbin/nologin atlas
 
 LABEL org.opencontainers.image.title="RedTeam Atlas" \
-      org.opencontainers.image.version="4.5.1"
+      org.opencontainers.image.version="4.5.2"
 
 WORKDIR /app
 ENV PORT=8080 \

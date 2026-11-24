@@ -199,17 +199,34 @@ sudo ./scripts/deploy.sh
 sudo ATLAS_PORT=8080 ATLAS_ADMIN_PASSWORD='Your#Pass2026' ./scripts/deploy.sh --yes
 ```
 
-**构建慢怎么办**
+**包源**
 
-首次构建要下载并编译全部 Rust 依赖，3–6 分钟属正常。如果每次都卡在 `apt-get install` 上百秒，是包源线路问题，在 `.env` 里指到国内镜像：
+构建默认走阿里云镜像，国内机器不用配任何东西：
+
+| 阶段 | 默认源 |
+| --- | --- |
+| apt（Debian 包） | `mirrors.aliyun.com` |
+| npm（前端依赖） | `https://registry.npmmirror.com` |
+| crates（Rust 依赖） | `sparse+https://mirrors.aliyun.com/crates.io-index/` |
+| rustup（工具链） | `https://mirrors.aliyun.com/rustup` |
+
+首次构建要下载并编译全部 Rust 依赖，3–6 分钟属正常；apt 阶段用了镜像通常十几秒就过。
+
+换回官方源（比如在国外机器上）：
 
 ```bash
-APT_MIRROR=mirrors.aliyun.com
+APT_MIRROR= NPM_REGISTRY= CARGO_MIRROR= docker compose build --no-cache atlas
+```
+
+换其他镜像站，在 `.env` 里写：
+
+```bash
+APT_MIRROR=mirrors.tuna.tsinghua.edu.cn
 NPM_REGISTRY=https://registry.npmmirror.com
 CARGO_MIRROR=sparse+https://mirrors.ustc.edu.cn/crates.io-index/
 ```
 
-加完重新构建，apt 阶段通常从 130 秒降到十几秒：
+改完重新构建：
 
 ```bash
 docker compose build --no-cache atlas

@@ -3,6 +3,41 @@
 官网 <https://github.com/1neptune/redteam-topology-v3>
 发布页 <https://github.com/1neptune/redteam-topology-v3/releases>
 
+## v4.5.2
+
+### 变更
+
+- **构建默认走阿里云镜像**，国内机器不用先配 `.env` 就能直接构建：
+
+  | 阶段 | 默认源 |
+  | --- | --- |
+  | apt（Debian 包） | `mirrors.aliyun.com` |
+  | npm（前端依赖） | `https://registry.npmmirror.com` |
+  | crates（Rust 依赖） | `sparse+https://mirrors.aliyun.com/crates.io-index/` |
+  | rustup（工具链） | `https://mirrors.aliyun.com/rustup` |
+
+  换回官方源：`.env` 里把这几项写成空值；换别的镜像站：写对应地址。
+  Dockerfile 的 `ARG` 与 compose 的插值都同步了默认值。
+
+- compose 的插值改用 `${VAR-default}` 而不是 `${VAR:-default}`：
+  后者连「定义为空」也取默认值，就没法通过写空值换回官方源了。
+
+### 实测
+
+四个源地址均返回 200：
+
+```
+http://mirrors.aliyun.com/debian/dists/bookworm/Release
+http://mirrors.aliyun.com/debian-security/dists/bookworm-security/Release
+https://registry.npmmirror.com/vue/latest
+https://mirrors.aliyun.com/rustup/dist/channel-rust-stable.toml
+```
+
+用阿里 crates 源跑 `cargo metadata` 依赖解析成功。
+
+### 变更
+
+- 版本号升到 4.5.2。
 ## v4.5.1
 
 ### 修复

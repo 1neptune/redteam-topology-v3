@@ -4,11 +4,17 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        # 国内机器在 .env 里设成 mirrors.aliyun.com 之类，apt 阶段能从 130 秒降到十几秒
-        APT_MIRROR: "${APT_MIRROR:-}"
-        NPM_REGISTRY: "${NPM_REGISTRY:-}"
-        CARGO_MIRROR: "${CARGO_MIRROR:-}"
-    image: redteam-atlas:4.5.1
+        # 默认走阿里云镜像，没写这几项时生效。
+        # 注意用的是 ${VAR-default} 而不是 ${VAR:-default}：
+        # 前者只在「未定义」时取默认，后者连「定义为空」也会取默认，
+        # 那样就没法通过写空值换回官方源了。
+        #   .env 里不写        -> 阿里源
+        #   .env 里写空值      -> 官方源
+        #   .env 里写别的站点  -> 那个站点
+        APT_MIRROR: "${APT_MIRROR-mirrors.aliyun.com}"
+        NPM_REGISTRY: "${NPM_REGISTRY-https://registry.npmmirror.com}"
+        CARGO_MIRROR: "${CARGO_MIRROR-sparse+https://mirrors.aliyun.com/crates.io-index/}"
+    image: redteam-atlas:4.5.2
     container_name: redteam-atlas
     restart: unless-stopped
     ports:
